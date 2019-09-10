@@ -1,0 +1,34 @@
+     A                                      DSPSIZ(27 132 *DS4)
+     A          R HDR1
+     A                                      OVERLAY
+     A            ZTL          131A  O  1  2DSPATR(HI)
+     A          R SFL1                      SFL
+     A            XVAR          16A  H
+     A            XSEG           9I 0H
+     A            XFIL         131   O  3  2
+     A          R CTL1                      SFLCTL(SFL1)
+     A                                      CF01 CF02 CF03 CF04 CF05 CF06 CF07
+     A                                      CF08 CF09 CF10 CF11 CF12 CF13 CF14
+     A                                      CF15 CF16 CF17 CF18 CF19 CF20 CF21
+     A                                      CF22 CF23 CF24 ROLLDOWN ROLLUP
+     A                                      OVERLAY
+     A                                      SFLCSRRRN(&SFLCSRRRN)
+     A  88                                  SFLDSP
+     A N89                                  SFLDSPCTL
+     A  89                                  SFLCLR
+     A                                      SFLSIZ(0023)
+     A                                      SFLPAG(0023)
+     A            CSRTOROW       3S 0H
+     A            CSRTOCOL       3S 0H
+     A            SFLCSRRRN      5S 0H
+     A            SFLRRN         4S 0H
+     A            MYSFLEND       7A  O 26126DSPATR(HI)
+     A            ZFK          123A  O 26  2COLOR(BLU)
+     A          R MSGSFL                    SFL SFLMSGRCD(27)
+     A            MSGSFLKEY                 SFLMSGKEY
+     A            PGMID                     SFLPGMQ(10)
+     A          R MSGCTL                    SFLCTL(MSGSFL)
+     A                                      SFLDSP SFLDSPCTL SFLINZ
+     A N98                                  SFLEND
+     A                                      SFLPAG(1) SFLSIZ(2)
+     A            PGMID                     SFLPGMQ(10)

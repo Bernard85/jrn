@@ -1,0 +1,101 @@
+     A*%%TS  SD  20180721  111520  BERNARD85   REL-V7R1M0  5770-WDS
+     A*%%EC
+     A                                      DSPSIZ(27 132 *DS4)
+     A                                      CHGINPDFT(UL)
+     A                                      PRINT
+     A          R HDR1
+     A*%%TS  SD  20180721  111520  BERNARD85   REL-V7R1M0  5770-WDS
+     A                                      CHANGE(90)
+     A                                      CF03
+     A                                      OVERLAY
+     A            ZTL          129A  O  1  2DSPATR(HI)
+     A                                  3 22'header'
+     A                                      DSPATR(HI)
+     A                                  4  2'Seq.'
+     A                                      DSPATR(HI)
+     A                                  4  7'field  '
+     A                                      DSPATR(HI)
+     A                                  4111'width'
+     A                                      DSPATR(HI)
+     A                                  4 18'fit'
+     A                                      DSPATR(HI)
+     A                                  4 22'width'
+     A                                      DSPATR(HI)
+     A                                  4 29'-- header --------------------'
+     A                                      DSPATR(HI)
+     A                                  4 60'-- Formula ------------------------
+     A                                      ----------------'
+     A                                      DSPATR(HI)
+     A                                  3  7'mother'
+     A                                      DSPATR(HI)
+     A                                  3111'formula'
+     A                                      DSPATR(HI)
+     A          R SFL1                      SFL
+     A*%%TS  SD  20180721  111520  BERNARD85   REL-V7R1M0  5770-WDS
+     A            XSEQ           4Y 0B  5  2EDTCDE(Z)
+     A            XID           10A  O  5  7
+     A            XEDTWIDTH      5Y 0O  5111EDTCDE(Z)
+     A            XHDRFIT        2Y 0B  5 19EDTCDE(Z)
+     A            XHDRWIDTH      4Y 0O  5 23EDTCDE(Z)
+     A  01        XH01           1A  B  5 29CHECK(LC)
+     A  02        XH02           2A  B  5 29CHECK(LC)
+     A  03        XH03           3A  B  5 29CHECK(LC)
+     A  04        XH04           4A  B  5 29CHECK(LC)
+     A  05        XH05           5A  B  5 29CHECK(LC)
+     A  06        XH06           6A  B  5 29CHECK(LC)
+     A  07        XH07           7A  B  5 29CHECK(LC)
+     A  08        XH08           8A  B  5 29CHECK(LC)
+     A  09        XH09           9A  B  5 29CHECK(LC)
+     A  10        XH10          10A  B  5 29CHECK(LC)
+     A  11        XH11          11A  B  5 29CHECK(LC)
+     A  12        XH12          12A  B  5 29CHECK(LC)
+     A  13        XH13          13A  B  5 29CHECK(LC)
+     A  14        XH14          14A  B  5 29CHECK(LC)
+     A  15        XH15          15A  B  5 29CHECK(LC)
+     A  16        XH16          16A  B  5 29CHECK(LC)
+     A  17        XH17          17A  B  5 29CHECK(LC)
+     A  18        XH18          18A  B  5 29CHECK(LC)
+     A  19        XH19          19A  B  5 29CHECK(LC)
+     A  20        XH20          20A  B  5 29CHECK(LC)
+     A  21        XH21          21A  B  5 29CHECK(LC)
+     A  22        XH22          22A  B  5 29CHECK(LC)
+     A  23        XH23          23A  B  5 29CHECK(LC)
+     A  24        XH24          24A  B  5 29CHECK(LC)
+     A  25        XH25          25A  B  5 29CHECK(LC)
+     A  26        XH26          26A  B  5 29CHECK(LC)
+     A  27        XH27          27A  B  5 29CHECK(LC)
+     A  28        XH28          28A  B  5 29CHECK(LC)
+     A  29        XH29          29A  B  5 29CHECK(LC)
+     A  30        XH30          30A  B  5 29CHECK(LC)
+     A            XFORMULA      50A  B  5 60CHECK(LC)
+     A          R CTL1                      SFLCTL(SFL1)
+     A                                      SFLSIZ(0021)
+     A                                      SFLPAG(0021)
+     A                                      CSRLOC(CSRTOROW   CSRTOCOL)
+     A                                      CF01 CF02 CF03 CF04 CF05 CF06 CF07
+     A                                      CF08 CF09 CF10 CF11 CF12 CF13 CF14
+     A                                      CF15 CF16 CF17 CF18 CF19 CF20 CF21
+     A                                      CF22 CF23 CF24 ROLLDOWN ROLLUP
+     A                                      OVERLAY
+     A                                      SFLCSRRRN(&SFLCSRRRN)
+     A  88                                  SFLDSP
+     A N89                                  SFLDSPCTL
+     A  89                                  SFLCLR
+     A            SFLCSRRRN      5S 0H
+     A            CSRTOROW       3S 0H
+     A            CSRTOCOL       3S 0H
+     A            SFLRRN         4S 0H
+     A            MYSFLEND      11A  O 26122DSPATR(HI)
+     A            ZFK          119   O 26  2COLOR(BLU)
+     A          R EMPTY1
+     A                                      OVERLAY
+     A                                  8  5'(No item has been found)'
+
+     A          R MSGSFL                    SFL SFLMSGRCD(27)
+     A            MSGSFLKEY                 SFLMSGKEY
+     A            PGMID                     SFLPGMQ(10)
+     A          R MSGCTL                    SFLCTL(MSGSFL)
+     A                                      SFLDSP SFLDSPCTL SFLINZ
+     A N98                                  SFLEND
+     A                                      SFLPAG(1) SFLSIZ(2)
+     A            PGMID                     SFLPGMQ(10)

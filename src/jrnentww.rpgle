@@ -5,6 +5,7 @@
 
       /copy cpy,u6Ibm_h
       /copy cpy,u6env_h
+      /copy cpy,u6filter_h
       /copy cpy,u6file_h
       /copy cpy,u6fmt_h
       /copy cpy,u6grid_h
@@ -21,7 +22,7 @@
       //˜Anchors
      D A               DS                  qualified
      d  lOpts                          *
-     d  lActions                       *
+     d  lFKs                           *
      d  lXViews                        *
      d  lFmts                          *
      d  lGrids                         *
@@ -37,9 +38,10 @@
      d  fRefresh                       n
      d  Item                               dim(20) likeds(tItem)
      d  anzJrnPath                  255a   varying
-     d  lAnz                           *
+     d  lJournal                       *
      d  lFiles                         *
      d  lEntries                       *
+     d  lFilters                       *
      d  hdta                         10i 0
      d  error                          n
      d  CanTabRight                    n   inz(*off)
@@ -56,6 +58,7 @@
      d   lVariant                      *
       *
      d  journal        ds                  likeDs(tJournal) based(pJournal)
+     d filters         ds                  likeds(tFilters) based(pFilters)
       //‚--------------------------------------------------------------------
       //‚main
       //‚--------------------------------------------------------------------
@@ -71,28 +74,39 @@
        msg_SndPM(pgmID:env_getWelcomeMessage());
        //‚Load special procedure
        int_loadprocs();
-       //‚Load function keys
-       screen_SetAction(A.lActions:x'31':'1':%pAddr(f1):'F1=Position?');
-       screen_SetAction(A.lActions:x'33':'0':%pAddr(F3):'F3=Exit');
-       screen_SetAction(A.lActions:x'37':'1':%pAddr(f7):'F7/F19=Left/all');
-       screen_SetAction(A.lActions:x'38':'1':%pAddr(f8):'F8/F20=Right/all');
-       screen_SetAction(A.lActions:x'3a':'1':%pAddr(f10):'F10=Move top');
-       screen_SetAction(A.lActions:x'b7':'1':%pAddr(f19):''     );
-       screen_SetAction(A.lActions:x'b8':'1':%pAddr(f20):'');
-       screen_SetAction(A.lActions:x'bc':'1':%pAddr(f24):'F24=Grid');
-       screen_SetAction(A.lActions:x'f1':'1':%pAddr(Enter));
-       screen_SetAction(A.lActions:x'f4':'1':%pAddr(rollUP));
-       screen_SetAction(A.lActions:x'f5':'1':%pAddr(rolldown));
-       zFK=screen_getfkentitle(A.lActions);
-       //‚Load options
-       screen_SetOption(A.lOpts:'5':*null:%pAddr(trtOpt):'5=Data');
-       screen_SetOption(A.lOpts:'j':*null:%pAddr(trtOpt):'j=Journal');
-       zCH=screen_getChoicesEntitle(A.lOpts);
-       //‚load journal                                                         -
-       g.lAnz=tree_xml2tree(g.anzJrnPath:%paddr(jrn_xmlinput));
-       jrn_getRoots(g.lAnz:g.lEntries);
-       pJournal=tree_getItem(g.lAnz);
+       //‚Load journal                                                         -
+       g.lJournal=tree_xml2tree(g.anzJrnPath:%paddr(jrn_xmlinput));
+       pJournal=tree_getItem(g.lJournal);
+       g.lEntries=tree_getLinkFromList(g.lJournal:kEntries);
+       g.lFilters=tree_getLinkFromList(g.lJournal:kFilters);
+       if g.lFilters=*null;
+         g.lFilters=
+         tree_getNewLink(tree_getNewItem(%addr(tFilters):%size(tFilters)));
+         tree_linkToparent(g.lJournal:g.lFilters:g.lEntries);
+       endIf;
+       pFilters=tree_getItem(g.lFilters);
        jrn_tieEntries(g.lEntries);
+       //‚Load function keys
+       screen_setFK(A.lFKs:x'31':'1':%pAddr(f1):'F1=Where');
+       screen_setFK(A.lFKs:x'33':'0':%pAddr(F3):'F3=Exit');
+       screen_setFK(A.lFKs:x'37':'1':%pAddr(f7):'F7/F19=Left/all');
+       screen_setFK(A.lFKs:x'38':'1':%pAddr(f8):'F8/F20=Right/all');
+       screen_setFK(A.lFKs:x'39':'1':%pAddr(f9):'F9=Apply filter'
+                                               :'F9=Display all ');
+       screen_setFKcontext(a.lFKs:x'39':%char(%int(filters.activated)));
+
+       screen_setFK(A.lFKs:x'3a':'1':%pAddr(f10):'F10=Top');
+       screen_setFK(A.lFKs:x'b7':'1':%pAddr(f19));
+       screen_setFK(A.lFKs:x'b8':'1':%pAddr(f20));
+       screen_setFK(A.lFKs:x'b9':'1':%pAddr(f21):'F21=Filter');
+       screen_setFK(A.lFKs:x'bc':'1':%pAddr(f24):'F24=Grid');
+       screen_setFK(A.lFKs:x'f1':'1':%pAddr(Enter));
+       screen_setFK(A.lFKs:x'f4':'1':%pAddr(rollUP));
+       screen_setFK(A.lFKs:x'f5':'1':%pAddr(rolldown));
+       //‚Load options
+       screen_SetOption(A.lOpts:'5':'5=Data');
+       screen_SetOption(A.lOpts:'j':'j=Journal');
+       zCH=screen_getChoicesEntitle(A.lOpts);
        //‚Title display
        ZTL='Work with analysis '
           +journal.text
@@ -119,6 +133,8 @@
        wrkScreens();
        //‚end of program                                                       -
        ifs_Close(g.hDta);
+       tree_dealloc(a.lFKs);
+       tree_dealloc(g.lJournal);
        *inlr=*on;
       //‚--------------------------------------------------------------------
       //‚loop on screens
@@ -142,11 +158,16 @@
      d pAction         s               *   procptr
      d fcontrol        s               n
        //‚refresh the work area
-       if g.lEntry1<>g.lEntry1_b4;
+       if g.lEntry1<>g.lEntry1_b4
+       or g.fRefresh
+       or screen_toRefresh();
+         zFK=screen_getfkentitle(A.lFKs);
          loadwa1();
        endif;
        //‚refresh the subfile
-       if g.lEntry1<>g.lEntry1_b4 or g.fRefresh;
+       if g.lEntry1<>g.lEntry1_b4
+       or g.fRefresh
+       or screen_toRefresh();
          loadSfl1();
        endIf;
        //‚display the limits                                                 -
@@ -162,7 +183,7 @@
        csrtocol=0;
        g.error=*off;
        //‚get/launch function key                                            -
-       screen_processFK(pgmID:A.lActions:wsds.kp:%pAddr(control));
+       screen_processFK(pgmID:A.lFKs:wsds.kp:%pAddr(control));
      p                 e
       //‚--------------------------------------------------------------------
       //‚display the limits
@@ -178,13 +199,6 @@
          pleftColumn=tree_getItem(XView.left.lColumn);
          prightColumn=tree_getItem(XView.right.lColumn);
 
-         msg_sndPM(pgmID
-         :'left:'+leftColumn.ID+'/'+%trim(%char(leftColumn.pos+4))
-                               +'/'+%trim(%char(xview.left.pos))
-         +' right:'+rightColumn.ID+'/'+%trim(%char(rightColumn.pos+4))
-                               +'/'+%trim(%char(xview.right.pos))
-         );
-
          lXView=tree_getNext(lXView);
        endDo;
      p                 e
@@ -198,7 +212,7 @@
      d NO              s              3u 0 inz(0)
      d lXview          s               *
        clear g.Item;
-       lEntry=g.lEntry1;
+       lEntry=tree_getCurrent(g.lEntry1:%pAddr(validator));
        dow lEntry<>*null;
          pEntry=tree_getItem(lEntry);
          //‚Check if enought row remains
@@ -215,9 +229,37 @@
          else;
            g.Item(no).lVariant=lEntry;
            g.Item(no).lXView=lXView;
-           lEntry=tree_getNext(lEntry);
+           lEntry=tree_getNext(lEntry:%pAddr(validator));
          endIf;
        endDo;
+     p                 e
+      //‚--------------------------------------------------------------------
+      //‚validator  0=Skip 1=Take it
+      //‚--------------------------------------------------------------------
+     pvalidator        b
+     d validator       pi             3i 0
+     d  lEntry                         *   const
+      *
+     d entry           ds                  likeDs(tEntry) based(pEntry)
+     d lFilterFile     s               *
+     d filters         ds                  likeDs(tFilters) based(pFilters)
+       //‚No filter input
+       if g.lFilters=*null;
+         return 1;
+       endIf;
+       //‚filter is activated?
+       pFilters=tree_getItem(g.lFilters);
+       if not Filters.activated;
+         return 1;
+       endif;
+       //‚File object omited?
+       pEntry=tree_getItem(lEntry);
+       lFilterFile=tree_getLinkFromList(g.lFilters:kFilter:'FILE');
+       if lFilterFile<>*null
+       and tree_getLinkFromList(lFilterFile:kOmit:entry.det.obj)<>*null;
+         return 0;
+       endIf;
+       return 1;
      p                 e
       //‚--------------------------------------------------------------------
       //‚Load lines of subfile
@@ -238,6 +280,12 @@
        WRITE ctl1;
        g.cantabRight=*off;
        g.cantabLeft =*off;
+       if g.item(1).lVariant=*null;
+         sflRrn1=1;
+         *in01=*on;
+         xFil1=x'20'+'(No entries displayable)';
+         write sfl1;
+       endif;
        //‚load lines
        for sflRrn1=1 to 20;
          //‚Leave if no item
@@ -305,7 +353,8 @@
        g.lEntry9_b4=g.lEntry9;
        g.fRefresh=*off;
        //‚more item or bottom of list
-       screen_setSflEnd(mySflEnd:tree_getNext(g.lEntry9)=*null);
+       screen_setSflEnd(mySflEnd:tree_getNext(g.lEntry9:%pAddr(validator))
+                       =*null);
      p                 e
       //‚--------------------------------------------------------------------
       //‚Load subfile columns
@@ -379,12 +428,6 @@
        return g.error;
      p                 e
       //‚--------------------------------------------------------------------
-      //‚traitement option
-      //‚--------------------------------------------------------------------
-     ptrtOpt           b
-     d trtopt          pi
-     p                 e
-      //‚--------------------------------------------------------------------
       //‚Roll-UP
       //‚--------------------------------------------------------------------
      pRollUp           b
@@ -394,12 +437,12 @@
      d lXView          s               *
      d Entry           ds                  likeds(tEntry) based(pEntry)
      d NO              s              3u 0 inz(0)
-       if G.lEntry1=tree_getFirst(g.lEntries);
+       if tree_getPrev(G.lEntry1:%pAddr(validator))=*null;
          msg_SndPM(pgmID:'You have reached the top of the list');
          return;
        endIf;
        lEntry=g.lEntry1;
-       lEntry=tree_getPrev(lEntry);
+       lEntry=tree_getPrev(lEntry:%pAddr(validator));
        dow lEntry<>*null;
          pEntry=tree_getItem(lEntry);
          if no=20;
@@ -410,7 +453,7 @@
          if lXView<>entry.lXView and entry.lXView<>*null;
            lXView=entry.lXView;
          else;
-           lEntry=tree_getPrev(lEntry);
+           lEntry=tree_getPrev(lEntry:%pAddr(validator));
          endif;
        enddo;
      p                 e
@@ -498,6 +541,7 @@
      pf3               b
      d f3              pi
        G.pScreen=*null;
+       xml_tree2xml(g.anzJrnPath:g.lJournal:%paddr(jrn_xmloutput));
      p                 e
       //‚--------------------------------------------------------------------
       //‚F7=Left tab
@@ -508,7 +552,7 @@
      d XView           ds                  likeDs(tXView) based(pXView)
        csrtorow=wsds.csrfromrow;
        csrtocol=wsds.csrfromcol;
-       if SFLCSRRRN=0;
+       if SFLCSRRRN=0 or g.Item(1).lVariant=*null;
          msg_SndPM(pgmID:'Wrong cursor position');
        else;
          csrtocol=%len(jrnxView.hdrs)+5;
@@ -530,7 +574,7 @@
      d XView           ds                  likeDs(tXView) based(pXView)
        csrtorow=wsds.csrfromrow;
        csrtocol=wsds.csrfromcol;
-       if SFLCSRRRN=0;
+       if SFLCSRRRN=0 or g.Item(1).lVariant=*null;
          msg_SndPM(pgmID:'Wrong cursor position');
        else;
          csrtocol=%len(jrnxView.hdrs)+5;
@@ -544,11 +588,22 @@
        endif;
      p                 e
       //‚--------------------------------------------------------------------
+      //‚F9=display all/apply filter
+      //‚--------------------------------------------------------------------
+     pf9               b
+     d f9              pi
+      *
+     d filters         ds                  likeDS(tFilters) based(pFilters)
+       pFilters=tree_getItem(g.lFilters);
+       filters.activated=not filters.activated;
+       g.fRefresh=*on;
+     p                 e
+      //‚--------------------------------------------------------------------
       //‚F10=Move to top
       //‚--------------------------------------------------------------------
      pf10              b
      d f10             pi
-       if SFLCSRRRN=0;
+       if SFLCSRRRN=0 or g.Item(1).lVariant=*null;
          msg_SndPM(pgmID:'Wrong cursor position');
        elseif tree_getKind(g.Item(sflcsrrrn).lVariant)=kXView;
          g.lEntry1=g.Item(sflcsrrrn+1).lVariant;
@@ -615,6 +670,18 @@
        else;
         msg_SndPM(pgmID:'Formats displayed are on the most right position');
        endif;
+     p                 e
+      //‚--------------------------------------------------------------------
+      //‚F21=Filter
+      //‚--------------------------------------------------------------------
+     pf21              b
+     d f21             pi
+      /copy cpy,filterup_h
+     d rtnCode         s              3i 0
+       filterUP(rtncode:g.lFiles:'FILE':g.lFilters);
+       if rtnCode=6;
+         g.fRefresh=*on;
+       endIf;
      p                 e
       //‚--------------------------------------------------------------------
       //‚F24=Grid

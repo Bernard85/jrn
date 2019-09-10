@@ -30,17 +30,13 @@
      d  lForms                         *
       //˜Anchors
      D A               DS                  qualified
-     d  lActions                       *
+     d  lFKs                           *
       //˜Global
      D G               DS                  qualified
      d  pScreen                        *   procptr
      d  item                               dim(23) likeDs(tItem)
      d  armTop                             likeDs(tArm)
      d  rcdChg                         n
-      //˜F9=data/journal
-     d fF9             s               n
-      //˜F11=Formula/Value
-     d fF11            s               n
       //˜item
      d  tItem          ds                  qualified
      d   lVariant                      *
@@ -53,63 +49,19 @@
      d  fmt            ds                  likeDs(tFormat) based(pFmt)
        //‚title
        zTL=zTL_;
-       //‚validate the view according to the option code
-       fF9=option='5';
-       resolveYView(fF9);
        //‚Load function keys
-       screen_SetAction(A.lActions:x'f1':'0':%pAddr(Enter));
-       screen_SetAction(A.lActions:x'33':'0':%pAddr(F3):'F3=Exit');
-       if fF9;
-       screen_SetAction(A.lActions:x'39':'0':%pAddr(F9):'F9=Journal');
-       else;
-       screen_SetAction(A.lActions:x'39':'0':%pAddr(F9):'F9=Data   ');
-       endIf;
-       screen_SetAction(A.lActions:x'3a':'0':%pAddr(f10):'F10=Move top');
-       screen_SetAction(A.lActions:x'3b':'0':%pAddr(F11):'F11=Formula');
-       screen_SetAction(A.lActions:x'f4':'0':%pAddr(rollUP));
-       screen_SetAction(A.lActions:x'f5':'0':%pAddr(rolldown));
-       zFK=screen_getfkentitle(A.lActions);
+       screen_setFK(a.lFKs:x'f1':'0':%pAddr(Enter));
+       screen_setFK(a.lFKs:x'33':'0':%pAddr(F3):'F3=Exit');
+       screen_setFK(a.lFKs:x'39':'0':%paddr(F9):'F9=Journal':'F9=Data   ');
+       screen_setFKcontext(a.lFKs:x'39':%char(%int(option='j')));
+       screen_setFK(a.lFKs:x'3a':'0':%pAddr(f10):'F10=Move top');
+       screen_setFK(a.lFKs:x'3b':'0':*null:'F11=Formula':'F11=Value');
+       screen_setFK(a.lFKs:x'f4':'0':%pAddr(rollUP));
+       screen_setFK(a.lFKs:x'f5':'0':%pAddr(rolldown));
        //‚work screens
        g.pScreen=%paddr(Screen1);
        wrkScreens();
        *inlr=*on;
-      //‚--------------------------------------------------------------------
-      //‚validate the view
-      //‚--------------------------------------------------------------------
-     presolveYView     b
-     d resolveYView    pi
-     d  data                           n
-      *
-     d  Entry0         ds                  likeds(tEntry)
-     d                                     based(Entry.pEntry0)
-       if data;
-         //‚get the file/format
-         lFile=tree_getItemfromList(lFiles:kFile:entry.det.obj);
-         pfile=tree_getItem(lFile);
-         lYView=yview_getYView(lYViews:lForms:lFmts:file.format);
-         pYView=tree_getItem(lYView);
-         //‚get corresponding data
-         pFmt=tree_getitem(YView.lFmt);
-         ifs_lseek(hDta:entry.det.aPos:0);
-         ifs_read(hDta:fmt.pBuffer1:fmt.len);
-         if entry.det.ENTT='UP';
-           g.rcdChg=*on;
-           ifs_lseek(hDta:entry0.det.aPos:0);
-           ifs_read(hDta:fmt.pBuffer0:fmt.len);
-         endIf;
-       else;
-         //‚get the format
-         lYView=yview_getYView(lYViews:lForms:lFmts:'JRNENTRY');
-         pYView=tree_getItem(lYView);
-         //‚get corresponding data
-         pFmt=tree_getitem(YView.lFmt);
-         fmt.pBuffer1=%addr(entry.det);
-         if entry.det.ENTT='UP';
-           g.rcdChg=*on;
-           fmt.pBuffer0=%addr(entry0.det);
-         endif;
-       endif;
-     p                 e
       //‚--------------------------------------------------------------------
       //‚loop on sceens
       //‚--------------------------------------------------------------------
@@ -117,6 +69,8 @@
      d wrkScreens      pi
       *
      d Screen          pr                  extproc(g.pScreen)
+       //‚F9=Load the corresponding view
+       F9();
        //‚loop on screens
        dow g.pScreen<>*null;
          screen();
@@ -132,7 +86,8 @@
      d cond2           s               n
      d label           ds                  likeDs(tLabel) based(pLabel)
        //‚refresh the list
-       if YView.armTop<>g.armTop;
+       if YView.armTop<>g.armTop or screen_ToRefresh();
+         zFK=screen_getfkentitle(a.lFKs);
          g.armTop=YView.armTop;
          loadSFL();
          //‚End of the Subfile ?
@@ -154,7 +109,7 @@
        csrtorow=0;
        csrtocol=0;
        //‚get/launch function key
-       screen_processFK(pgmID:A.lActions:wsds.kp:*null);
+       screen_processFK(pgmID:a.lFKs:wsds.kp:*null);
      p                 e
       //‚--------------------------------------------------------------------
       //‚Load the subfile
@@ -301,7 +256,7 @@
            %subst(xFil:1:1)='ˆ';
            %subst(xFil:53:1)='€';
          endIf;
-         if fF11;
+         if screen_getFKcontext(a.lFKS:x'3b')='1';
            %subst(xFil:60-%len(label.formula)-2:%len(label.formula)+2)
            ='‚'+label.formula+x'20';
          endIf;
@@ -357,18 +312,43 @@
        g.pScreen=*null;
        rtnCode=fStop;
      p                 e
-      //‚-------------------------------------------------------------------
-      //‚F11=Formula/Value
-      //‚-------------------------------------------------------------------
-     pF11              b
-     d F11             pi
-       if fF11;
-         zFK=%scanrpl('F11=Value  ':'F11=Formula':zFK);
+      //‚--------------------------------------------------------------------
+      //‚F9=Data/Journal
+      //‚--------------------------------------------------------------------
+     pF9               b
+     d F9              pi
+      *
+     d  Entry0         ds                  likeds(tEntry)
+     d                                     based(Entry.pEntry0)
+       //‚CONTEXT=DISPLAY RECORD DATA
+       if screen_getFKcontext(a.lFKs:x'39')='0';
+         //‚get the file/format
+         lFile=tree_getLinkFromList(lFiles:kFile:entry.det.obj);
+         pfile=tree_getItem(lFile);
+         lYView=yview_getYView(lYViews:lForms:lFmts:file.format);
+         pYView=tree_getItem(lYView);
+         //‚get corresponding data
+         pFmt=tree_getitem(YView.lFmt);
+         ifs_lseek(hDta:entry.det.aPos:0);
+         ifs_read(hDta:fmt.pBuffer1:fmt.len);
+         if entry.det.ENTT='UP';
+           g.rcdChg=*on;
+           ifs_lseek(hDta:entry0.det.aPos:0);
+           ifs_read(hDta:fmt.pBuffer0:fmt.len);
+         endIf;
+       //‚CONTEXT=DISPLAY JOURNAL DATA
        else;
-         zFK=%scanrpl('F11=Formula':'F11=Value  ':zFK);
-       endIf;
-       fF11=not fF11;
-       clear g.armTop;
+         //‚get the format
+         lYView=yview_getYView(lYViews:lForms:lFmts:'JRNENTRY');
+         pYView=tree_getItem(lYView);
+         //‚get corresponding data
+         pFmt=tree_getitem(YView.lFmt);
+         fmt.pBuffer1=%addr(entry.det);
+         if entry.det.ENTT='UP';
+           g.rcdChg=*on;
+           fmt.pBuffer0=%addr(entry0.det);
+         endif;
+       endif;
      p                 e
       //‚-------------------------------------------------------------------
       //‚F10=Move to top
@@ -381,19 +361,6 @@
          YView.armTop.lVariant=g.item(SFLCSRRRN).lVariant;
          YView.armTop.segment=g.item(SFLCSRRRN).segment;
        endIf;
-     p                 e
-      //‚-------------------------------------------------------------------
-      //‚F9=journal/data
-      //‚-------------------------------------------------------------------
-     pF9               b
-     d F9              pi
-       if fF9;
-         zFK=%ScanRpl('F9=Journal':'F9=Data   ':zFK);
-       else;
-         zFK=%ScanRpl('F9=Data   ':'F9=Journal':zFK);
-       endIf;
-       fF9=not fF9;
-       resolveYView(fF9);
      p                 e
       //‚-------------------------------------------------------------------
       //‚Roll-down

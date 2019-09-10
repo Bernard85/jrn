@@ -24,7 +24,7 @@
      d  lAnz9                          *   inz(*null)
      d  lAnz9_B4                       *   inz(*null)
      d  lOpts                          *   inz(*null)
-     d  lActions                       *   inz(*null)
+     d  lFKs                           *   inz(*null)
      d  jrnExt                       10a   varying
      d  jrnPath                      80a   varying
      d  indexPath                    80a   varying
@@ -39,22 +39,20 @@
        //‚Title
        ZTL='Work with Journals analysis';
        //‚Load function keys
-       screen_SetAction(g.lActions:x'33':'0':%pAddr(F3):'F3=Exit');
-       screen_SetAction(g.lActions:x'36':'1':%pAddr(f6):'F6=Save');
-       screen_SetAction(g.lActions:x'3a':'1':%pAddr(f10):'F10=Move to top');
-       screen_SetAction(g.lActions:x'b8':'1':%pAddr(f20):'F20=Renumber');
-       screen_SetAction(g.lActions:x'f1':'1':%pAddr(Enter));
-       screen_SetAction(g.lActions:x'f4':*ON :%pAddr(rollUP  ));
-       screen_SetAction(g.lActions:x'f5':*ON :%pAddr(rolldown));
-       zFK=screen_getfkentitle(g.lActions);
+       screen_setFK(g.lFKs:x'33':'0':%pAddr(F3):'F3=Exit');
+       screen_setFK(g.lFKs:x'36':'1':%pAddr(f6):'F6=Save');
+       screen_setFK(g.lFKs:x'3a':'1':%pAddr(f10):'F10=Move to top');
+       screen_setFK(g.lFKs:x'b8':'1':%pAddr(f20):'F20=Renumber');
+       screen_setFK(g.lFKs:x'f1':'1':%pAddr(Enter));
+       screen_setFK(g.lFKs:x'f4':*ON :%pAddr(rollUP));
+       screen_setFK(g.lFKs:x'f5':*ON :%pAddr(rolldown));
+       zFK=screen_getfkentitle(g.lFKs);
        //‚Load options
-       screen_SetOption(g.lOpts:'E':*null:%pAddr(trtOpt)
-       :'E=Entries');
-       screen_SetOption(g.lOpts:'X':*null:%pAddr(trtOpt)
-       :'X=XML');
-       screen_SetOption(g.lOpts:'x':*null:%pAddr(trtOpt));
+       screen_SetOption(g.lOpts:'E':'E=Entries');
+       screen_SetOption(g.lOpts:'X':'X=XML');
+       screen_SetOption(g.lOpts:'x');
        zCH=screen_getChoicesEntitle(g.lOpts);
-       //‚load index                                                         -
+       //‚load index
        g.jrnPath=env_getpath(cJournal);
        g.jrnExt=env_getExt(cJournal);
        g.indexPath=g.jrnPath+g.jrnExt+'.index';
@@ -64,9 +62,9 @@
          pIndex=Tree_getNewItem(%addr(tIndex):%size(tIndex));
          g.lAnzs=tree_getNewLink(pIndex);
        endIf;
-       //‚browse files from folder                                           -
+       //‚browse files from folder
        ifs_browseFiles(g.jrnPath:%paddr(procFile));
-       //‚Sort elements                                                        -
+       //‚Sort elements
        tree_Sort(g.lAnzs:%paddr(index_comparator));
        g.lAnz1=tree_getFirst(g.lAnzs);
        wrkScreen();
@@ -102,38 +100,28 @@
            mySflEnd='More...';
          endIf;
        endIf;
-       //‚display activation                                                 -
+       //‚display activation
        write msgCtl;
        write hdr1;
        *in88=*on;
        *in89=*off;
        exfmt ctl1;
        msg_rmvPM(pgmID);
-       //‚get/launch function key                                            -
-       pAction=screen_getActionfromKey(g.lActions:wsds.kp:fcontrol);
-       g.Error=*off;
-       if pAction=*null;
-         msg_SndPM(pgmID:'Function key invalid');
-       else;
-         if fControl;
-           control();
-         endIf;
-         if not g.Error;
-           fkProcess();
-         endIf;
-       endIf;
+       //‚get/launch function key
+       screen_processFK(pgmID:g.lFKs:wsds.kp:%pAddr(Control));
      p                 e
       //‚--------------------------------------------------------------------
       //‚to process file in directory
       //‚--------------------------------------------------------------------
      pControl          b
-     d Control         pi
+     d Control         pi              n
       *
      d Anz             ds                  likeDs(tElement) based(pAnz)
      d pCheckProc      s               *   procptr
      d checkProc       pr              n   extproc(pCheckProc)
      d  lAnz                           *
-     d pOption         s               *
+     d lOption         s               *
+     d error           s               n   inz(*off)
        readc sfl1;
        dow not %eof();
          *in01=*off;
@@ -144,22 +132,17 @@
          endIf;
          tree_SetOption(g.lAnz(sf1rrn):xChoice);
          if xChoice<>'';
-           pOption=screen_GetOptionfromChoice(g.lOpts:xChoice);
-           if pOption=*null;
+           lOption=tree_getLinkFromList(g.lOpts:'o':xChoice);
+           if lOption=*null;
              g.error=*on;
-             msg_SndPM(pgmID:'Option "'+xChoice+'" is not valid');
+             msg_SndPM(pgmID:'Option '''+xChoice+''' is not valid');
              *in01=*on;
-           else;
-             pCheckProc=Screen_GetCheckProcFromOption(pOption);
-             if pCheckProc<>*null;
-               *in01=CheckProc(g.lanz(sf1rrn));
-               g.error=g.error or *in01;
-             endIf;
            endif;
          endif;
          update sfl1;
          readc sfl1;
        enddo;
+       return error;
      p                 e
       //‚--------------------------------------------------------------------
       //‚to process file in directory
@@ -174,7 +157,7 @@
        if %scan('.'+g.jrnExt:wPath)=0;
          return;
        endIf;
-       lAnz=tree_getItemfromList(g.lAnzs:kElement:wPath);
+       lAnz=tree_getLinkFromList(g.lAnzs:kElement:wPath);
        if lAnz<>*null;
          pAnz=tree_getItem(lAnz);
        //‚Case of a new analysis not yet listed
@@ -218,9 +201,9 @@
          lAnz=tree_getNext(lAnz);
        endFor;
      p                 e
-      //‚--------------------------------------------------------------------
+      //‚-----------------------------------------------------------------------
       //‚Loadind subfile
-      //‚--------------------------------------------------------------------
+      //‚-----------------------------------------------------------------------
      p loadSF1         b
       *
      d Anz             ds                  likeDs(tElement) based(pAnz)
@@ -273,12 +256,12 @@
      d lAnz            s               *
      d Choice          s              1a
      d pOption         s               *
-     d pValProc        s               *   procptr
-     d ValProc         pr              n   extproc(pValProc)
-     d                                 *
+   86d Anz             ds                  likeDs(tElement) based(pAnz)
+     d cmd             s             80a   varying
+      /copy cpy,jrnentww_h
        if g.fToSort;
          g.fToSort=*off;
-         //‚Sort elements                                                      -
+         //‚Sort elements
          tree_Sort(g.lAnzs:%paddr(index_comparator));
          g.lAnz1_b4=*null;
          return;
@@ -288,16 +271,18 @@
        dow lAnz<>*null;
          choice=tree_getOption(lAnz);
          if choice<>'';
-           pOption=screen_getOptionFromChoice(g.lOpts:choice);
-           pValProc=screen_GetValidationProcFromOption(pOption);
-           if pValProc<>*null;
-             if not valProc(lAnz);
-               tree_setOption(lAnz:'');
-             else;
-               leave;
-             endIf;
-             g.lAnz1_b4=*null;
+           pAnz=tree_getItem(lAnz);
+           if choice='X';
+             cmd='dspf '''+g.jrnPath+anz.ID+'''';
+             qcmdexc(cmd:%len(cmd));
+           elseif choice='x';
+             cmd='edtf '''+g.jrnPath+anz.ID+'''';
+             qcmdexc(cmd:%len(cmd));
+           elseif choice='E';
+             jrnentww(0:%scanrpl('.jrn':'':anz.ID));
            endIf;
+           g.lAnz1_b4=*null;
+           tree_setOption(lAnz:'');
          endIf;
          lAnz=tree_getNext(lAnz);
        endDo;
@@ -352,9 +337,9 @@
        endDo;
        g.lAnz1_b4=*null;
      p                 e
-      //‚------------------------------------------------------------------- ---
+      //‚-----------------------------------------------------------------------
       //‚Synch
-      //‚------------------------------------------------------------------- ---
+      //‚-----------------------------------------------------------------------
      pSync             b
      d Sync            pi
       *
@@ -367,30 +352,4 @@
          endIf;
          G.lAnz1=lX;
        endFor;
-     p                 e
-      //‚-----------------------------------------------------------------------
-      //‚Procedures for validate option selected
-      //‚-----------------------------------------------------------------------
-     ptrtOpt           b
-     d trtOpt          pi              n
-     d  lAnz                           *
-     d rtn             s              3u 0
-     d anz             ds                  likeDs(tElement) based(pAnz)
-     d cmd             s             80a   varying
-     d option          s              1a
-     D JRNENTWW        pr                  extpgm('JRNENTWW')
-     d  rtncode                       3u 0 const
-     D  jrnPath                      50a   const
-       option=tree_getOption(lAnz);
-       pAnz=tree_getItem(lAnz);
-       if option='X';
-         cmd='dspf '''+g.jrnPath+anz.ID+'''';
-         qcmdexc(cmd:%len(cmd));
-       elseif option='x';
-         cmd='edtf '''+g.jrnPath+anz.ID+'''';
-         qcmdexc(cmd:%len(cmd));
-       elseif option='E';
-         jrnentww(0:%scanrpl('.jrn':'':anz.ID));
-       endIf;
-       return *off;
      p                 e

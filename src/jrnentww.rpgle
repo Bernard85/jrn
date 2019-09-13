@@ -91,14 +91,15 @@
        screen_setFK(A.lFKs:x'33':'0':%pAddr(F3):'F3=Exit');
        screen_setFK(A.lFKs:x'37':'1':%pAddr(f7):'F7/F19=Left/all');
        screen_setFK(A.lFKs:x'38':'1':%pAddr(f8):'F8/F20=Right/all');
-       screen_setFK(A.lFKs:x'39':'1':%pAddr(f9):'F9=Apply filter'
-                                               :'F9=Display all ');
-       screen_setFKcontext(a.lFKs:x'39':%char(%int(filters.activated)));
-
        screen_setFK(A.lFKs:x'3a':'1':%pAddr(f10):'F10=Top');
+
+       screen_setFK(A.lFKs:x'3b':'1':%pAddr(f11):'F11/F23=Filtered   /Filter'
+                                                :'F11/F23=Display all/Filter');
+       screen_setFKcontext(a.lFKs:x'3b':%char(%int(filters.activated)));
+
        screen_setFK(A.lFKs:x'b7':'1':%pAddr(f19));
        screen_setFK(A.lFKs:x'b8':'1':%pAddr(f20));
-       screen_setFK(A.lFKs:x'b9':'1':%pAddr(f21):'F21=Filter');
+       screen_setFK(A.lFKs:x'bb':'1':%pAddr(f23));
        screen_setFK(A.lFKs:x'bc':'1':%pAddr(f24):'F24=Grid');
        screen_setFK(A.lFKs:x'f1':'1':%pAddr(Enter));
        screen_setFK(A.lFKs:x'f4':'1':%pAddr(rollUP));
@@ -212,7 +213,7 @@
      d NO              s              3u 0 inz(0)
      d lXview          s               *
        clear g.Item;
-       lEntry=tree_getCurrent(g.lEntry1:%pAddr(validator));
+       lEntry=tree_getCurrent(g.lEntry1:%pAddr(filterValidator));
        dow lEntry<>*null;
          pEntry=tree_getItem(lEntry);
          //‚Check if enought row remains
@@ -229,15 +230,15 @@
          else;
            g.Item(no).lVariant=lEntry;
            g.Item(no).lXView=lXView;
-           lEntry=tree_getNext(lEntry:%pAddr(validator));
+           lEntry=tree_getNext(lEntry:%pAddr(filterValidator));
          endIf;
        endDo;
      p                 e
       //‚--------------------------------------------------------------------
-      //‚validator  0=Skip 1=Take it
+      //‚filter validator  0=Skip 1=Take it
       //‚--------------------------------------------------------------------
-     pvalidator        b
-     d validator       pi             3i 0
+     pfilterValidator  b
+     dfilterValidator  pi             3i 0
      d  lEntry                         *   const
       *
      d entry           ds                  likeDs(tEntry) based(pEntry)
@@ -353,7 +354,7 @@
        g.lEntry9_b4=g.lEntry9;
        g.fRefresh=*off;
        //‚more item or bottom of list
-       screen_setSflEnd(mySflEnd:tree_getNext(g.lEntry9:%pAddr(validator))
+       screen_setSflEnd(mySflEnd:tree_getNext(g.lEntry9:%pAddr(filterValidator))
                        =*null);
      p                 e
       //‚--------------------------------------------------------------------
@@ -437,12 +438,12 @@
      d lXView          s               *
      d Entry           ds                  likeds(tEntry) based(pEntry)
      d NO              s              3u 0 inz(0)
-       if tree_getPrev(G.lEntry1:%pAddr(validator))=*null;
+       if tree_getPrev(G.lEntry1:%pAddr(filterValidator))=*null;
          msg_SndPM(pgmID:'You have reached the top of the list');
          return;
        endIf;
        lEntry=g.lEntry1;
-       lEntry=tree_getPrev(lEntry:%pAddr(validator));
+       lEntry=tree_getPrev(lEntry:%pAddr(filterValidator));
        dow lEntry<>*null;
          pEntry=tree_getItem(lEntry);
          if no=20;
@@ -453,7 +454,7 @@
          if lXView<>entry.lXView and entry.lXView<>*null;
            lXView=entry.lXView;
          else;
-           lEntry=tree_getPrev(lEntry:%pAddr(validator));
+           lEntry=tree_getPrev(lEntry:%pAddr(filterValidator));
          endif;
        enddo;
      p                 e
@@ -588,17 +589,6 @@
        endif;
      p                 e
       //‚--------------------------------------------------------------------
-      //‚F9=display all/apply filter
-      //‚--------------------------------------------------------------------
-     pf9               b
-     d f9              pi
-      *
-     d filters         ds                  likeDS(tFilters) based(pFilters)
-       pFilters=tree_getItem(g.lFilters);
-       filters.activated=not filters.activated;
-       g.fRefresh=*on;
-     p                 e
-      //‚--------------------------------------------------------------------
       //‚F10=Move to top
       //‚--------------------------------------------------------------------
      pf10              b
@@ -610,6 +600,17 @@
        else;
          g.lEntry1=g.Item(sflcsrrrn).lVariant;
        endIf;
+     p                 e
+      //‚--------------------------------------------------------------------
+      //‚F11=display all/apply filter
+      //‚--------------------------------------------------------------------
+     pf11              b
+     d f11             pi
+      *
+     d filters         ds                  likeDS(tFilters) based(pFilters)
+       pFilters=tree_getItem(g.lFilters);
+       filters.activated=not filters.activated;
+       g.fRefresh=*on;
      p                 e
       //‚--------------------------------------------------------------------
       //‚F18=Position all views on the left
@@ -672,10 +673,10 @@
        endif;
      p                 e
       //‚--------------------------------------------------------------------
-      //‚F21=Filter
+      //‚F23=Filter
       //‚--------------------------------------------------------------------
-     pf21              b
-     d f21             pi
+     pf23              b
+     d f23             pi
       /copy cpy,filterup_h
      d rtnCode         s              3i 0
        filterUP(rtncode:g.lFiles:'FILE':g.lFilters);

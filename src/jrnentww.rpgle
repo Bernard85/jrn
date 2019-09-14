@@ -87,13 +87,14 @@
        pFilters=tree_getItem(g.lFilters);
        jrn_tieEntries(g.lEntries);
        //‚Load function keys
-       screen_setFK(A.lFKs:x'31':'1':%pAddr(f1):'F1=Where');
+       screen_setFK(A.lFKs:x'31':'1':%pAddr(f1));
        screen_setFK(A.lFKs:x'33':'0':%pAddr(F3):'F3=Exit');
+       screen_setFK(A.lFKs:x'36':'1':%pAddr(f6):'F6=To left');
        screen_setFK(A.lFKs:x'37':'1':%pAddr(f7):'F7/F19=Left/all');
        screen_setFK(A.lFKs:x'38':'1':%pAddr(f8):'F8/F20=Right/all');
-       screen_setFK(A.lFKs:x'3a':'1':%pAddr(f10):'F10=Top');
+       screen_setFK(A.lFKs:x'3a':'1':%pAddr(f10):'F10=To top');
 
-       screen_setFK(A.lFKs:x'3b':'1':%pAddr(f11):'F11/F23=Filtered   /Filter'
+       screen_setFK(A.lFKs:x'3b':'1':%pAddr(f11):'F11/F23=Filtered/Filter   '
                                                 :'F11/F23=Display all/Filter');
        screen_setFKcontext(a.lFKs:x'3b':%char(%int(filters.activated)));
 
@@ -115,7 +116,7 @@
        //‚load view for journal (fixed part)                                   -
        pJrnxView=xview_loadxView(a.lGrids:a.lFmts:'JRNENTRY');
        jrnXView.hdrColor=x'28';
-       xview_PosAtLeft(jrnXView:%len(xFil)/2);
+       xview_posToMostLeft(jrnXView:%len(xFil)/2);
        xview_sethdrs(jrnXView:0);
        jrnxView.hdrs+=x'20'+'|';
        lJrnXview=tree_getNewLink(pJrnXView);
@@ -510,7 +511,8 @@
      pf1               b
      d f1              pi
       *
-     d column          ds                  likeds(tColumn)
+     d lColumn         s               *
+     d column          ds                  likeds(tColumn) based(pColumn)
      d posOnColumn     s              5u 0
        csrtorow=wsds.csrfromrow;
        csrtocol=wsds.csrfromcol;
@@ -522,14 +524,16 @@
        elseif wsds.CsrFromCol-margin<%len(jrnxView.hdrs);
          xview_getColumnAtPos(lJrnXView
                              :wsds.CsrFromCol-margin
-                             :column
+                             :lColumn
                              :posOnColumn);
+         pColumn=tree_getItem(lColumn);
          msg_SndPM(pgmID:'You are on the column '+%trim(column.formula)
                         +' '+%char(posOnColumn));
        elseif xview_getColumnAtPos(g.Item(sflcsrrrn).lXView
                                   :wsds.CsrFromCol-margin
-                                  :column
+                                  :lColumn
                                   :posOnColumn);
+         pColumn=tree_getItem(lColumn);
          msg_SndPM(pgmID:'You are on the column '+%trim(column.formula)
                         +' '+%char(posOnColumn));
        else;
@@ -545,6 +549,33 @@
        xml_tree2xml(g.anzJrnPath:g.lJournal:%paddr(jrn_xmloutput));
      p                 e
       //‚--------------------------------------------------------------------
+      //‚F6=to left
+      //‚--------------------------------------------------------------------
+     pf6               b
+     d f6              pi
+      *
+     d lColumn         s               *
+     d posOnColumn     s              5u 0
+     d XView           ds                  likeDS(tXView) based(pXView)
+       csrtorow=wsds.csrfromrow;
+       csrtocol=wsds.csrfromcol;
+       if SFLCSRRRN>0
+       and xview_getColumnAtPos(g.Item(sflcsrrrn).lXView
+                               :wsds.CsrFromCol-margin
+                               :lcolumn
+                               :posOnColumn);
+         pXView=tree_getItem(g.Item(sflcsrrrn).lXView);
+         xview_posAtLeft(XView
+                        :g.freePartWidth
+                        :lcolumn
+                        :posOnColumn);
+         csrtocol=%len(jrnxView.hdrs)+6;
+         g.fRefresh=*on;
+       else;
+         msg_SndPM(pgmID:'No displayed column at the specified position');
+       endIf;
+     p                 e
+      //‚--------------------------------------------------------------------
       //‚F7=Left tab
       //‚--------------------------------------------------------------------
      pf7               b
@@ -556,7 +587,7 @@
        if SFLCSRRRN=0 or g.Item(1).lVariant=*null;
          msg_SndPM(pgmID:'Wrong cursor position');
        else;
-         csrtocol=%len(jrnxView.hdrs)+5;
+         csrtocol=%len(jrnxView.hdrs)+6;
          pXView=tree_getItem(g.item(SFLCSRRRN).lXView);
          if XView.left.most;
            msg_SndPM(pgmID:'Format is on the most left position');
@@ -578,7 +609,7 @@
        if SFLCSRRRN=0 or g.Item(1).lVariant=*null;
          msg_SndPM(pgmID:'Wrong cursor position');
        else;
-         csrtocol=%len(jrnxView.hdrs)+5;
+         csrtocol=%len(jrnxView.hdrs)+6;
          pXView=tree_getItem(g.item(SFLCSRRRN).lXView);
          if XView.Right.most;
            msg_SndPM(pgmID:'Format is on the rightmost position');
@@ -624,7 +655,7 @@
          lXView=tree_getFirst(a.lXViews);
          dow lXView<>*null;
            pXView=tree_getItem(lXView);
-           xview_PosAtLeft(XView:g.freePartWidth);
+           xview_posToMostLeft(XView:g.freePartWidth);
            lXView=tree_getNext(lXView);
          endDo;
          g.fRefresh=*on;

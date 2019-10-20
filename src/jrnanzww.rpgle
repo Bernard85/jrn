@@ -16,7 +16,6 @@
      D G               DS                  qualified
      d  screen                        3u 0 inz(1)
      D  change                         N
-     D  error                          N
      D  lAnzs                          *
      d  lAnz                           *   dim(18) inz(*null)
      d  lAnz1                          *   inz(*null)
@@ -134,7 +133,7 @@
          if xChoice<>'';
            lOption=tree_getLinkFromList(g.lOpts:'o':xChoice);
            if lOption=*null;
-             g.error=*on;
+             error=*on;
              msg_SndPM(pgmID:'Option '''+xChoice+''' is not valid');
              *in01=*on;
            endif;
@@ -208,6 +207,7 @@
       *
      d Anz             ds                  likeDs(tElement) based(pAnz)
        //‚clear subfile
+       *in01=*off;
        *in88=*off;
        *in89=*on;
        WRITE ctl1;

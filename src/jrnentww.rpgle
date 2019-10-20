@@ -31,10 +31,10 @@
       //˜Global fields
      D G               DS                  qualified
      d  pScreen                        *   procptr
-     d  lEntry1                        *
-     d  lEntry1_b4                     *
-     d  lEntry9                        *
-     d  lEntry9_b4                     *
+     d  lVariant1                      *
+     d  lVariant1_b4                   *
+     d  lVariant9                      *
+     d  lVariant9_b4                   *
      d  fRefresh                       n
      d  Item                               dim(20) likeds(tItem)
      d  anzJrnPath                  255a   varying
@@ -47,7 +47,7 @@
      d  CanTabRight                    n   inz(*off)
      d  CanTabLeft                     n   inz(*on)
      d  freePartWidth                 3u 0
-     d  lEntry_last                    *
+     d  lVariant_last                  *
       *
      d  jrnXView       ds                  likeDs(txView) based(pJrnxView)
      d  lJrnXView      s               *
@@ -67,6 +67,7 @@
      d   AnzID                       35
       *
      d lColumn         s               *
+     d lFmtEntry       s               *
      d Column          ds                  likeDs(tColumn) based(pColumn)
        //‚get path for journal analysis
        g.anzJrnPath=env_getFileName(cJournal:%trim(anzID));
@@ -110,28 +111,28 @@
        screen_SetOption(A.lOpts:'j':'j=Journal');
        zCH=screen_getChoicesEntitle(A.lOpts);
        //‚Title display
-       ZTL='Work with analysis '
+       zTL='Work with analysis '
           +journal.text
           +' ['+journal.ID+']';
        //‚load view for journal (fixed part)                                   -
-       pJrnxView=xview_loadxView(a.lGrids:a.lFmts:'JRNENTRY');
-       jrnXView.hdrColor=x'28';
+       lFmtEntry=fmt_getFormat(a.lFmts:'JRNENTRY');
+       pJrnxView=xview_loadxView(a.lXViews:a.LGrids:lFmtEntry);
+       jrnXView.hdrColor=x'22';
        xview_posToMostLeft(jrnXView:%len(xFil)/2);
        xview_sethdrs(jrnXView:0);
-       jrnxView.hdrs+=x'20'+'|';
        lJrnXview=tree_getNewLink(pJrnXView);
 
-       g.freePartWidth=%len(xFil)-%len(jrnxView.hdrs);
+       g.freePartWidth=%len(xFil)-%len(jrnxView.hdrs)-2;
 
-       //‚load other views (free part)
-       loadXViews();
-       //‚position on the left
-       f18();
        //‚get handle on data journal
        G.hDta=ifs_openForRead(env_getFileName(cData:%trim(AnzID)));
+       //‚load other views (free part)
+       EntriesLoad();
+       //‚position on the left
+       f18();
        //‚work screens                                                        -
        g.pScreen=%pAddr(screen1);
-       g.lEntry1=tree_getFirst(g.lEntries);
+       g.lVariant1=tree_getFirst(g.lEntries);
        wrkScreens();
        //‚end of program                                                       -
        ifs_Close(g.hDta);
@@ -160,14 +161,14 @@
      d pAction         s               *   procptr
      d fcontrol        s               n
        //‚refresh the work area
-       if g.lEntry1<>g.lEntry1_b4
+       if g.lVariant1<>g.lVariant1_b4
        or g.fRefresh
        or screen_toRefresh();
          zFK=screen_getfkentitle(A.lFKs);
          loadwa1();
        endif;
        //‚refresh the subfile
-       if g.lEntry1<>g.lEntry1_b4
+       if g.lVariant1<>g.lVariant1_b4
        or g.fRefresh
        or screen_toRefresh();
          loadSfl1();
@@ -209,53 +210,79 @@
       //‚--------------------------------------------------------------------
      p loadwa1         b
       *
-     d lEntry          s               *
-     d Entry           ds                  likeds(tEntry) based(pEntry)
+     d lVariant        s               *
      d NO              s              3u 0 inz(0)
      d lXview          s               *
        clear g.Item;
-       lEntry=tree_getCurrent(g.lEntry1:%pAddr(filterValidator));
-       dow lEntry<>*null;
-         pEntry=tree_getItem(lEntry);
+       lVariant=tree_getCurrent(g.lVariant1:%pAddr(filterValidator));
+       dow lVariant<>*null;
          //‚Check if enought row remains
          if NO=20;
            leave;
          endif;
          //‚store view+entry
          NO+=1;
-         g.lEntry9=lEntry;
-         if lXView<>Entry.lXView and Entry.lXView<>*null;
-           lXView=Entry.lXView;
+         g.lVariant9=lVariant;
+         if breakOnXView(lXView:lVariant);
            g.Item(no).lVariant=lXView;
            g.Item(no).lXView=lXView;
          else;
-           g.Item(no).lVariant=lEntry;
+           g.Item(no).lVariant=lVariant;
            g.Item(no).lXView=lXView;
-           lEntry=tree_getNext(lEntry:%pAddr(filterValidator));
+           lVariant=
+           tree_getNextToDisplay(g.lEntries:lVariant:%pAddr(filterValidator));
          endIf;
        endDo;
+     p                 e
+      //‚--------------------------------------------------------------------
+      //‚break on XView
+      //‚--------------------------------------------------------------------
+     pbreakOnXView     b
+     d breakOnXView    pi              n
+     d  lXView                         *
+     d  lVariant                       *   const
+      *
+     d entry           ds                  likeDS(tEntry)    based(pEntry)
+     d subEntry        ds                  likeDS(tSubEntry) based(pSubEntry)
+     d lXView$         s               *
+       if tree_isofthekind(kEntry:lVariant:pEntry);
+         lXView$=Entry.lXView;
+       elseif tree_isofthekind(kSubEntry:lVariant:pSubEntry);
+         lXView$=SubEntry.lXView;
+       endIf;
+       if lXView$<>*null and lXView<>lXView$;
+         lXView=lXView$;
+         return *on;
+       endIf;
+       return *off;
      p                 e
       //‚--------------------------------------------------------------------
       //‚filter validator  0=Skip 1=Take it
       //‚--------------------------------------------------------------------
      pfilterValidator  b
      dfilterValidator  pi             3i 0
-     d  lEntry                         *   const
+     d  lVariant                       *   const
       *
-     d entry           ds                  likeDs(tEntry) based(pEntry)
+     d subEntry        ds                  likeDs(tSubEntry) based(pSubEntry)
+     d entry           ds                  likeDs(tEntry)    based(pEntry)
      d lFilterFile     s               *
      d filters         ds                  likeDs(tFilters) based(pFilters)
        //‚No filter input
        if g.lFilters=*null;
          return 1;
        endIf;
+       //‚only entry taken in account for the filter
+       if tree_isofthekind(kSubEntry:lVariant);
+         return 1;
+       else;
+         pEntry=tree_getItem(lVariant);
+       endif;
        //‚filter is activated?
        pFilters=tree_getItem(g.lFilters);
        if not Filters.activated;
          return 1;
        endif;
        //‚File object omited?
-       pEntry=tree_getItem(lEntry);
        lFilterFile=tree_getLinkFromList(g.lFilters:kFilter:'FILE');
        if lFilterFile<>*null
        and tree_getLinkFromList(lFilterFile:kOmit:entry.det.obj)<>*null;
@@ -269,13 +296,9 @@
      ploadSFl1         b
      d loadSFl1        pi
       *
-     d xView           ds                  likeDs(tXView)  based(pXView)
-     d entry           ds                  likeDs(tEntry) based(pEntry)
-     d entry0          ds                  likeDs(tEntry) based(pEntry0)
-     d lColumn         s               *
-     d column          ds                  likeds(tColumn) based(pColumn)
-     d fmt             ds                  likeds(tFormat) based(pFmt)
-     d fChg            s              3i 0
+     d lVariant        s               *
+     d  XView          ds                  likeDs(tXview) based(pXview)
+     d fCase           s              3i 0
        //‚clear subfile
        sflDsp=*off;
        sflClr=*on;
@@ -288,84 +311,156 @@
          xFil1=x'20'+'(No entries displayable)';
          write sfl1;
        endif;
-       //‚load lines
+       //‚load the subfile according to the work table
        for sflRrn1=1 to 20;
          //‚Leave if no item
-         if g.Item(sflRrn1).lVariant=*null;
+         lVariant=g.Item(sflRrn1).lVariant;
+         if lVariant=*null;
            leave;
          endif;
-         //‚clear the fields of the row
-         *in01=*off;
-         xCho='';
-         xFil='';
-         //‚Load line according to the kind of corresponding item
-         if tree_isofthekind(kXView:g.Item(sflRrn1).lVariant:pXView);
-           //‚header
+         pXView=tree_getItem(g.Item(sflRrn1).lXView);
+         if tree_isofthekind(kXView:lVariant);
+           //‚1) Load headers
            *in01=*on;
-           xFil1='Opt'
-                +jrnXView.hdrs
-                +xview_setHdrs(XView:%len(jrnXView.hdrs));
-           if sflrrn1>1;
-             %subst(xfil1:1:1+%len(jrnXView.hdrs))='';
-           endif;
-           g.canTabRight=g.canTabRight or not XView.right.most;
-           g.canTabLeft =g.canTabLeft  or not XView.Left.most;
-         elseif tree_isofthekind(kEntry:g.Item(sflRrn1).lVariant:pEntry)
-           and entry.det.dtaL>0
-           and ENTRY.DET.CODE='R';
-           //‚1) Choice
-           xCho=tree_getOption(g.Item(sflRrn1).lVariant);
-           //‚2) To force the cursor position
-           if g.lEntry_last=g.Item(sflRrn1).lVariant;
-             csrToCol=3;
-             csrToRow=sflRrn1+6-1;
-           endIf;
-           //‚3) to setup the color
-           if Entry.det.ENTT='DL'
-           or entry.det.ENTT='DR';
-             fChg=-1;
-           else;
-             fChg=%int(entry.pEntry0<>*null);
-           endIf;
+           loadSFL1A(lVariant);
+         else;
+           *in01=*off;
+           //‚2) Load option
+           loadSFL1B(lVariant);
+           //‚3) Determine if the current entry is linked to another
+           fCase=getCase(lVariant);
            //‚4) journal part
-           pFmt=tree_getitem(jrnXView.lFmt);
-           fmt.pBuffer1=%addr(entry.det);
-           if entry.pEntry0<>*null;
-             pEntry0=entry.pEntry0;
-             fmt.pBuffer0=%addr(entry0.det);
-           endif;
-           loadSFC1(jrnXView:xFil:fChg);
-           //‚5) separator
-           %subst(xFil:%len(jrnXView.hdrs)-1:2)=x'20'+'|';
-           //‚6) data part
-           pFmt=tree_getitem(XView.lFmt);
-           ifs_lseek(g.hDta:entry.det.aPos:0);
-           ifs_read(g.hDta:fmt.pBuffer1:fmt.len);
-           //
-           if entry.pEntry0<>*null;
-             ifs_lseek(g.hDta:entry0.det.aPos:0);
-             ifs_read(g.hDta:fmt.pBuffer0:fmt.len);
-           endif;
-           loadSFC1(XView:xFil:fChg);
+           loadSFL1c(lVariant:fCase);
+           //‚5) data part
+           loadSFL1d(XView:lVariant:fCase);
          endIf;
          write sfl1;
        endFor;
        //
-       g.lEntry1_b4=g.lEntry1;
-       g.lEntry9_b4=g.lEntry9;
+       g.lVariant1_b4=g.lVariant1;
+       g.lVariant9_b4=g.lVariant9;
        g.fRefresh=*off;
        //‚more item or bottom of list
-       screen_setSflEnd(mySflEnd:tree_getNext(g.lEntry9:%pAddr(filterValidator))
+       screen_setSflEnd(mySflEnd:
+        tree_getNextToDisplay(g.lEntries:g.lVariant9:%pAddr(filterValidator))
                        =*null);
+     p                 e
+      //‚--------------------------------------------------------------------
+      //‚Load lines of subfile / headers
+      //‚--------------------------------------------------------------------
+     ploadSFl1A        b
+     d loadSFl1A       pi
+     d  lVariant                       *   const
+      *
+     d xView           ds                  likeDs(tXView)  based(pXView)
+       //‚Load line according to the kind of corresponding item
+       if not tree_isofthekind(kXView:lVariant:pXView);
+         return;
+       endIf;
+       //‚header
+       xFil1='';
+       if sflrrn1=1;
+         xFil1='Opt'+jrnXView.hdrs;
+       endif;
+       %subst(xfil1:%len(jrnXView.hdrs)+4)
+       =x'22'+'|'+xview_setHdrs(XView:%len(jrnXView.hdrs)+2);
+       g.canTabRight=g.canTabRight or not XView.right.most;
+       g.canTabLeft =g.canTabLeft  or not XView.Left.most;
+     p                 e
+      //‚--------------------------------------------------------------------
+      //‚Load lines of subfile / option
+      //‚--------------------------------------------------------------------
+     ploadSFl1B        b
+     d loadSFl1B       pi
+     d  lVariant                       *   const
+      *
+       xCho=tree_getOption(lVariant);
+       if g.lVariant_last=lVariant;
+         csrToCol=3;
+         csrToRow=sflRrn1+6-1;
+       endIf;
+     p                 e
+      //‚--------------------------------------------------------------------
+      //‚Load journal part
+      //‚--------------------------------------------------------------------
+     ploadSFl1C        b
+     d loadSFl1C       pi
+     d  lVariant                       *   const
+     d  fCase                         3i 0 const
+      *
+     d fmt             ds                  likeds(tFormat) based(pFmt)
+     d entry           ds                  likeDs(tEntry) based(pEntry)
+     d entry0          ds                  likeDs(tEntry) based(pEntry0)
+       xFil='';
+       if tree_isofthekind(kEntry:lVariant:pEntry);
+         pFmt=tree_getitem(jrnXView.lFmt);
+         fmt.pBuffer1=%addr(entry.det);
+         if entry.pEntry0<>*null;
+           pEntry0=entry.pEntry0;
+           fmt.pBuffer0=%addr(entry0.det);
+         endif;
+         loadSFC1(jrnXView:xFil:fCase);
+       endIf;
+     p                 e
+      //‚--------------------------------------------------------------------
+      //‚Load data part
+      //‚--------------------------------------------------------------------
+     ploadSFl1D        b
+     d loadSFl1D       pi
+     d  xView                              const likeDs(tXView)
+     d  lVariant                       *   const
+     d  fCase                         3i 0 const
+      *
+     d fmt             ds                  likeds(tFormat) based(pFmt)
+     d entry           ds                  likeDs(tEntry) based(pEntry)
+     d entry0          ds                  likeDs(tEntry) based(pEntry0)
+     d subEntry        ds                  likeDs(tSubEntry) based(pSubEntry)
+     d pos             s             10u 0
+       pFmt=tree_getItem(xView.lFmt);
+       if tree_isofthekind(kEntry:lVariant:pEntry);
+         pos=0;
+       elseif tree_isofthekind(kSubEntry:lVariant:pSubEntry);
+         pEntry=tree_getItem(tree_getParent(lVariant));
+         pos=subEntry.pos;
+       endIf;
+       %subst(xfil:%len(jrnXView.hdrs)+1)=x'22'+'|';
+       ifs_lseek(g.hDta:entry.det.apos+pos:0);
+       ifs_read(g.hDta:Fmt.pBuffer1:Fmt.len);
+       if Entry.pEntry0<>*null;
+         pEntry0=Entry.pEntry0;
+         ifs_lseek(g.hDta:entry0.det.apos+pos:0);
+         ifs_read(g.hDta:Fmt.pBuffer0:Fmt.len);
+       endif;
+       loadSFC1(XView:xFil:fCase);
+     p                 e
+      //‚--------------------------------------------------------------------
+      //‚case -1=Deleted,0=Not changed,1=Changed
+      //‚--------------------------------------------------------------------
+     pgetCase          b
+     d getCase         pi             3i 0
+     d  lVariant                       *   const
+      *
+     d  entry          ds                  likeds(tEntry) based(pEntry)
+       //‚validate the entry
+       if not tree_isofthekind(kEntry:lVariant:pEntry);
+         pEntry=tree_getItem(tree_getParent(lVariant));
+       endif;
+       //‚4) to setup the color
+       if entry.det.ENTT='DL'
+       or entry.det.ENTT='DR';
+         return -1;
+       else;
+         return %int(entry.pEntry0<>*null);
+       endIf;
      p                 e
       //‚--------------------------------------------------------------------
       //‚Load subfile columns
       //‚--------------------------------------------------------------------
      ploadSFC1         b
      d loadSFC1        pi
-     d XView                               likeDs(tXView)
+     d XView                               likeDs(tXView) const
      d xFil                         128
-     d fChg                           3i 0 const
+     d fCase                          3i 0 const
       *
      d lColumn         s               *
      d Column          ds                  likeDs(tColumn) based(pColumn)
@@ -374,15 +469,15 @@
        lColumn=XView.left.lColumn;
        dow 1=1;
          pColumn=tree_getItem(lColumn);
-         string=int_getStringFromArg(column.lFormula);
+         string=int_FormulaExec(column.lFormula);
          //‚1) Attribut of the cell
-         if fChg=0;
+         if fCase=0;
            //‚no change on the record
            %subst(xFil:Column.pos-1:1)=XView.Detcolor;
-         elseif fChg=-1;
+         elseif fCase=-1;
            //‚record deleted
            %subst(xFil:Column.pos-1:1)=x'2b';
-         elseif int_getStringFromArg(column.lFormula:0)<>string;
+         elseif int_FormulaExec(column.lFormula:0)<>string;
            //‚field has been changed
            %subst(xFil:Column.pos-1:1)=XView.ChgColor;
          else;
@@ -435,27 +530,27 @@
      pRollUp           b
      d RollUp          pi
       *
-     d lEntry          s               *
+     d lVariant        s               *
      d lXView          s               *
-     d Entry           ds                  likeds(tEntry) based(pEntry)
      d NO              s              3u 0 inz(0)
-       if tree_getPrev(G.lEntry1:%pAddr(filterValidator))=*null;
+       if tree_getPrevToDisplay(g.lEntries:g.lVariant1:%pAddr(filterValidator))
+       =*null;
          msg_SndPM(pgmID:'You have reached the top of the list');
          return;
        endIf;
-       lEntry=g.lEntry1;
-       lEntry=tree_getPrev(lEntry:%pAddr(filterValidator));
-       dow lEntry<>*null;
-         pEntry=tree_getItem(lEntry);
+       lVariant
+       =tree_getPrevtoDisplay(g.lEntries:g.lVariant1:%pAddr(filterValidator));
+       dow lVariant<>*null;
          if no=20;
-           leave;
+           return;
          endif;
-         no+=1;
-         g.lEntry1=lEntry;
-         if lXView<>entry.lXView and entry.lXView<>*null;
-           lXView=entry.lXView;
+         g.lVariant1=lVariant;
+         if breakOnXView(lXView:lVariant);
+           no+=1;
          else;
-           lEntry=tree_getPrev(lEntry:%pAddr(filterValidator));
+           no+=1;
+           lVariant
+           =tree_getPrevtoDisplay(g.lEntries:lVariant:%pAddr(filterValidator));
          endif;
        enddo;
      p                 e
@@ -467,7 +562,8 @@
        if mySflEnd='Bottom';
          msg_SndPM(pgmID:'You have reached the bottom of the list');
        else;
-         g.lEntry1=tree_getNext(g.lEntry9);
+         g.lVariant1=
+         tree_getNextToDisplay(g.lEntries:g.lVariant9:%pAddr(filterValidator));
        endIf;
      p                 e
       //‚--------------------------------------------------------------------
@@ -476,33 +572,32 @@
      pEnter            b
      d Enter           pi
       *
-     d lEntry          s               *
-     d entry           ds                  likeds(tEntry) based(pEntry)
+     d lVariant        s               *
      d rtnCode         s              3i 0
      d option          s              1a
       *
       /copy cpy,jrnentdp_h
        //‚loop on each entry                                                 -
-       lEntry=tree_getFirst(g.lEntries);
-       dow lEntry<>*null;
-         option=tree_getOption(lEntry);
+       lVariant=tree_getFirst(g.lEntries);
+       dow lVariant<>*null;
+         option=tree_getOption(lVariant);
          if %scan(option:'5j')>0;
            g.fRefresh=*on;
-           pEntry=tree_getItem(lEntry);
            jrnEntDp(rtncode:option
-                   :ztl:Entry
+                   :ztl
+                   :lVariant
                    :g.hDta
                    :g.lFiles:a.lYViews:a.lFmts:a.lForms);
-         g.lEntry_last=lEntry;
+         g.lVariant_last=lVariant;
            if rtnCode>0;
-             tree_setOption(lEntry:'');
+             tree_setOption(lVariant:'');
            elseif rtnCode=0;
              leave;
            else;
              leave;
            endIf;
          endIf;
-         lEntry=tree_getNext(lEntry);
+         lVariant=tree_getNexttoDisplay(g.lEntries:lVariant);
        endDo;
      p                 e
       //‚--------------------------------------------------------------------
@@ -518,10 +613,10 @@
        csrtocol=wsds.csrfromcol;
        if SFLCSRRRN=0
        or wsds.CsrFromCol<=margin
-       or wsds.CsrFromCol-margin=%len(jrnxView.hdrs)-1
-       or wsds.CsrFromCol-margin=%len(jrnxView.hdrs);
+       or  wsds.CsrFromCol>margin+%len(jrnxView.hdrs)
+       and wsds.CsrFromCol<margin+%len(jrnxView.hdrs)+3;
          msg_SndPM(pgmID:'Wrong cursor position');
-       elseif wsds.CsrFromCol-margin<%len(jrnxView.hdrs);
+       elseif wsds.CsrFromCol-margin<=%len(jrnxView.hdrs);
          xview_getColumnAtPos(lJrnXView
                              :wsds.CsrFromCol-margin
                              :lColumn
@@ -569,7 +664,7 @@
                         :g.freePartWidth
                         :lcolumn
                         :posOnColumn);
-         csrtocol=%len(jrnxView.hdrs)+6;
+         csrtocol=3;
          g.fRefresh=*on;
        else;
          msg_SndPM(pgmID:'No displayed column at the specified position');
@@ -587,7 +682,7 @@
        if SFLCSRRRN=0 or g.Item(1).lVariant=*null;
          msg_SndPM(pgmID:'Wrong cursor position');
        else;
-         csrtocol=%len(jrnxView.hdrs)+6;
+         csrtocol=3;
          pXView=tree_getItem(g.item(SFLCSRRRN).lXView);
          if XView.left.most;
            msg_SndPM(pgmID:'Format is on the most left position');
@@ -609,10 +704,10 @@
        if SFLCSRRRN=0 or g.Item(1).lVariant=*null;
          msg_SndPM(pgmID:'Wrong cursor position');
        else;
-         csrtocol=%len(jrnxView.hdrs)+6;
+         csrtocol=3;
          pXView=tree_getItem(g.item(SFLCSRRRN).lXView);
          if XView.Right.most;
-           msg_SndPM(pgmID:'Format is on the rightmost position');
+           msg_SndPM(pgmID:'Format is on the most right position');
          else;
            xview_TabRight(XView:g.freePartWidth);
            g.fRefresh=*on;
@@ -627,9 +722,9 @@
        if SFLCSRRRN=0 or g.Item(1).lVariant=*null;
          msg_SndPM(pgmID:'Wrong cursor position');
        elseif tree_getKind(g.Item(sflcsrrrn).lVariant)=kXView;
-         g.lEntry1=g.Item(sflcsrrrn+1).lVariant;
+         g.lVariant1=g.Item(sflcsrrrn+1).lVariant;
        else;
-         g.lEntry1=g.Item(sflcsrrrn).lVariant;
+         g.lVariant1=g.Item(sflcsrrrn).lVariant;
        endIf;
      p                 e
       //‚--------------------------------------------------------------------
@@ -744,14 +839,15 @@
        endIf;
      p                 e
       //‚--------------------------------------------------------------------
-      //‚XView are loaded for each entry
+      //‚Entries load
       //‚--------------------------------------------------------------------
-     ploadXViews       b
-     d loadXViews      pi
+     pEntriesLoad      b
+     d EntriesLoad     pi
      d lEntry          s               *
      d Entry           ds                  likeDs(tEntry) based(pEntry)
      d lFile           s               *
      d File            ds                  likeDs(tFile) based(pFile)
+     d lFmt            s               *
        //‚Files are loaded from analysis
        lEntry=tree_getFirst(g.lEntries);
        dow lEntry<>*null;
@@ -762,10 +858,55 @@
            //‚Load the corresponding XVIew
            if lFile<>*null;
              pFile=tree_getItem(lFile);
-             entry.lXView
-               =xview_getXView(a.lXViews:a.lGrids:a.lFmts:File.Format);
+             lFmt=fmt_getFormat(a.lFmts:File.format);
+             entry.lXView=xview_getXView(a.lXViews:a.lGrids:lFmt);
+             SubEntriesLoad(lEntry:lFmt:0);
            endif;
          endif;
          lEntry=tree_getNext(lEntry);
+       endDo;
+     p                 e
+      //‚--------------------------------------------------------------------
+      //‚Sub-Entries load
+      //‚--------------------------------------------------------------------
+     pSubEntriesLoad   b
+     d SubEntriesLoad  pi
+     d  lEntry                         *   const
+     d  lParentFmt                     *   const
+     d  pos                          10u 0 value
+      *
+     d  entry          ds                  likeDs(tEntry)  based(pEntry)
+     d  ParentFmt      ds                  likeDs(tFormat) based(pParentFmt)
+     d  lSubFormats    s               *
+     d  lSubFormat     s               *
+     d  SubFormat      ds                  likeDs(tSubFormat) based(pSubFormat)
+     d  formatID       s             10A   varying
+     d  lFormat        s               *
+     d  SubEntry       ds                  likeDs(tSubEntry) based(pSubEntry)
+      *
+       lSubFormats=tree_getLinkFromList(lParentFmt:kSubFormats);
+       if lSubFormats=*null;
+         return;
+       endif;
+       pEntry=tree_getItem(lEntry);
+       pParentFmt=tree_getItem(lParentFmt);
+       ifs_lseek(g.hDta:entry.det.aPos+pos:0);
+       ifs_read(g.hDta:ParentFmt.pBuffer1:ParentFmt.len);
+       lSubFormat=tree_getFirst(lSubformats);
+       dow lSubFormat<>*null;
+         pSubFormat=tree_getItem(lSubFormat);
+         formatID=int_FormulaExec(SubFormat.lFormula);
+         lFormat=fmt_getFormat(a.lFmts:formatID);
+         if lFormat<>*null;
+          if tree_getLinkFromList(lFormat:kFields)<>*null;
+            pSubEntry=tree_getNewItem(%addr(tSubEntry):%size(tSubEntry));
+            SubEntry.lXView=xview_getXView(a.lXViews:a.lGrids:lFormat);
+            SubEntry.pos=subFormat.pos+pos;
+            SubEntry.fmtID=formatID;
+            tree_linktoparent(lEntry:tree_getnewlink(pSubEntry));
+          endIf;
+          SubEntriesLoad(lEntry:lFormat:subFormat.pos+pos);
+         endIf;
+         lSubFormat=tree_getNext(lSubformat);
        endDo;
      p                 e

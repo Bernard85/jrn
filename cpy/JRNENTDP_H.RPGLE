@@ -2,7 +2,7 @@
      d  rtnCode                       3i 0
      d  option                        1a
      d  ztl                         131
-     d  Entry                              likeds(tEntry)
+     d  lVariant                       *
      d  hDta                         10i 0
      d  lFiles                         *
      d  lYViews                        *

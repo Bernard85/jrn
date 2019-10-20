@@ -22,7 +22,7 @@
      d  rtnCode                       3i 0
      d  option                        1a
      d  zTL_                        131a
-     d  Entry                          a   likeds(tEntry)
+     d  lVariant                       *
      d  hDta                         10i 0
      d  lFiles                         *
      d  lYViews                        *
@@ -96,7 +96,8 @@
          else;
            cond1=*on;
          endIf;
-         cond2=tree_getNextToDisplay(YView.armBot.lVariant)=*null;
+         cond2=tree_getNextToDisplay(YView.lForm
+                                    :YView.armBot.lVariant)=*null;
          screen_setSflEnd(mySflEnd:cond1 and cond2);
        endif;
        //‚display activation
@@ -154,10 +155,10 @@
            labelChg=*on;
            //‚load value(s) for the label
            if g.rcdChg;
-             string1=int_getStringFromArg(label.lFormula:2);
-             string2=int_getStringFromArg(label.lFormula:1);
+             string1=int_FormulaExec(label.lFormula:2);
+             string2=int_FormulaExec(label.lFormula:1);
            else;
-             string1=int_getStringFromArg(label.lFormula:1);
+             string1=int_FormulaExec(label.lFormula:1);
            endIf;
            //‚loop on each segment
            s9=(label.maxWidth-1)/70;
@@ -181,7 +182,7 @@
            endFor;
          endIf;
          s0=0;
-         lVariant=tree_getNextToDisplay(lVariant);
+         lVariant=tree_getNextToDisplay(YView.lForm:lVariant);
          //‚new panel?
          if tree_isOfTheKind(kPanel:lVariant);
            lPanel$=lVariant;
@@ -318,10 +319,28 @@
      pF9               b
      d F9              pi
       *
+     d  Entry          ds                  likeDs(tEntry) based(pEntry)
      d  Entry0         ds                  likeds(tEntry)
      d                                     based(Entry.pEntry0)
-       //‚CONTEXT=DISPLAY RECORD DATA
-       if screen_getFKcontext(a.lFKs:x'39')='0';
+     d  subEntry       ds                  likeDs(tSubEntry) based(pSubEntry)
+       //‚CONTEXT=DISPLAY JOURNAL DATA
+       if screen_getFKcontext(a.lFKs:x'39')='1';
+         //‚get the format
+         lYView=yview_getYView(lYViews:lForms:lFmts:'JRNENTRY');
+         pYView=tree_getItem(lYView);
+         pFmt=tree_getitem(YView.lFmt);
+         //‚get the entry
+         if not tree_isofthekind(kEntry:lVariant:pEntry);
+           pEntry=tree_getItem(tree_getParent(lVariant));
+         endIf;
+         fmt.pBuffer1=%addr(entry.det);
+         if entry.pEntry0<>*null;
+           g.rcdChg=*on;
+           fmt.pBuffer0=%addr(entry0.det);
+         endif;
+       //‚CONTEXT=DISPLAY RECORD DATA + ENTRY
+       elseif screen_getFKcontext(a.lFKs:x'39')='0'
+       and tree_isofthekind(kEntry:lVariant:pEntry);
          //‚get the file/format
          lFile=tree_getLinkFromList(lFiles:kFile:entry.det.obj);
          pfile=tree_getItem(lFile);
@@ -331,23 +350,25 @@
          pFmt=tree_getitem(YView.lFmt);
          ifs_lseek(hDta:entry.det.aPos:0);
          ifs_read(hDta:fmt.pBuffer1:fmt.len);
-         if entry.det.ENTT='UP';
+         if entry.pEntry0<>*null;
            g.rcdChg=*on;
            ifs_lseek(hDta:entry0.det.aPos:0);
            ifs_read(hDta:fmt.pBuffer0:fmt.len);
          endIf;
-       //‚CONTEXT=DISPLAY JOURNAL DATA
-       else;
-         //‚get the format
-         lYView=yview_getYView(lYViews:lForms:lFmts:'JRNENTRY');
+       //‚CONTEXT=DISPLAY RECORD DATA + SUBENTRY
+       elseif screen_getFKcontext(a.lFKs:x'39')='0'
+       and tree_isofthekind(kSubEntry:lVariant:pSubEntry);
+         pEntry=tree_getItem(tree_getParent(lVariant));
+         lYView=yview_getYView(lYViews:lForms:lFmts:SubEntry.fmtID);
          pYView=tree_getItem(lYView);
-         //‚get corresponding data
          pFmt=tree_getitem(YView.lFmt);
-         fmt.pBuffer1=%addr(entry.det);
-         if entry.det.ENTT='UP';
+         ifs_lseek(hDta:Entry.det.apos+subEntry.Pos:0);
+         ifs_read(hDta:fmt.pBuffer1:fmt.len);
+         if entry.pEntry0<>*null;
            g.rcdChg=*on;
-           fmt.pBuffer0=%addr(entry0.det);
-         endif;
+           ifs_lseek(hDta:entry0.det.aPos+subEntry.Pos:0);
+           ifs_read(hDta:fmt.pBuffer0:fmt.len);
+         endIf;
        endif;
      p                 e
       //‚-------------------------------------------------------------------
@@ -377,7 +398,8 @@
           if YView.armTop.segment<(label.maxWidth-1)/70;
             YView.armTop.segment+=1;
           else;
-            YView.armTop.lVariant=tree_getNextToDisplay(YView.armTop.lVariant);
+            YView.armTop.lVariant=tree_getNextToDisplay(YView.lForm
+                                                       :YView.armTop.lVariant);
             YView.armTop.segment=0;
           endif;
        endIf;
@@ -405,7 +427,7 @@
        if YView.armTop.segment>0;
          s9=YView.armTop.segment-1;
        else;
-         lVariant=tree_getPrevToDisplay(lVariant);
+         lVariant=tree_getPrevToDisplay(YView.lForm:lVariant);
          if tree_isOftheKind(kLabel:lVariant:pLabel);
            s9=(label.maxWidth-1)/70;
          endIf;
@@ -418,8 +440,8 @@
          elseif tree_isofthekind(kLabel:lVariant:pLabel);
            //‚load value(s) for the label
            if g.rcdChg;
-             string1=int_getStringFromArg(label.lFormula:2);
-             string2=int_getStringFromArg(label.lFormula:1);
+             string1=int_FormulaExec(label.lFormula:2);
+             string2=int_FormulaExec(label.lFormula:1);
            endIf;
            //‚loop on each segment
            for s=s9 downto 0;
@@ -441,7 +463,7 @@
              YView.armtop.segment=s;
            endFor;
          endIf;
-         lVariant=tree_getPrevToDisplay(lVariant);
+         lVariant=tree_getPrevToDisplay(YView.lForm:lVariant);
          //‚new panel/label?
          if tree_isOfTheKind(kPanel:lVariant);
            PanelChg=*on;

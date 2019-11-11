@@ -30,6 +30,7 @@
      d  fFmt                          1
      d  fForm                         1
      d  fGrid                         1
+     d  fAppli                        1a   options(*nopass)
 
      d lFile           s               *
      d file            ds                  likeDs(tFile)   based(pFile)
@@ -46,6 +47,14 @@
 
      d lGrid           s               *
      d grid            ds                  likeDs(tGrid)   based(pGrid)
+     d outPath         s             50a   varying
+       //‚Appli or client path
+       if %parms()=%parmNum(fAppli)
+       and fAppli='Y';
+         outPath=env_getAppliPath();
+       else;
+         outPath=env_getClientPath();
+       endIf;
        //‚Retreive object description
        qusrobjd_(QUSD0200:%size(QUSD0200):'OBJD0200'
                 :fileID+'*LIBL':'*FILE':apierr);
@@ -93,25 +102,25 @@
        detail();
        //‚1) Save the file
        if fFile='Y';
-         xml_tree2XML(env_getFileName(cFile:%trim(fileID))
+         xml_tree2XML(outPath+%trim(fileID)+'.file'
                      :lFile
                      :%pAddr(file_xmlOutput));
        endIf;
        //‚2) Save the format
        if fFmt='Y';
-         xml_tree2XML(env_getFileName(cFmt:%trim(fmtID))
+         xml_tree2XML(outPath+%trim(fmtID)+'.fmt'
                      :lFormat
                      :%pAddr(fmt_xmlOutput));
        endIf;
        //‚3) Save the form
        if fForm='Y';
-         xml_tree2XML(env_getFileName(cForm:%trim(fmtID))
+         xml_tree2XML(outPath+%trim(fmtID)+'.form'
                      :lForm
                      :%pAddr(form_xmlOutput));
        endIf;
        //‚4) Save the grid
        if fGrid='Y';
-         xml_tree2XML(env_getFileName(cGrid:%trim(fmtID))
+         xml_tree2XML(outPath+%trim(fmtID)+'.grid'
                      :lGrid
                      :%pAddr(grid_xmlOutput));
        endIf;

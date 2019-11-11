@@ -1,0 +1,8 @@
+<STATS>
+  <STAT ID="PGM"    FORMULA="pgm"/>progam
+  <STAT ID="OBJ"    FORMULA="obj"/>object
+  <STAT ID="USPF"   FORMULA="uspf"/>user profile
+  <STAT ID="JOB"    FORMULA="jobno+'/'+jobusr+'/'+jobid">job
+  <STAT ID="CODE"   FORMULA="code"/>code
+  <STAT ID="ENTT"   FORMULA="entt"/>Entry type
+</STATS>

@@ -24,10 +24,10 @@
      d  lAnz9_B4                       *   inz(*null)
      d  lOpts                          *   inz(*null)
      d  lFKs                           *   inz(*null)
-     d  jrnExt                       10a   varying
-     d  jrnPath                      80a   varying
-     d  indexPath                    80a   varying
+     d  jrnPath                      50a   varying
+     d  indexPath                    50a   varying
      d  fToSort                        n
+     d  lIdx                           *   inz(*null)
       //‚--------------------------------------------------------------------
       //‚main
       //‚--------------------------------------------------------------------
@@ -52,15 +52,11 @@
        screen_SetOption(g.lOpts:'x');
        zCH=screen_getChoicesEntitle(g.lOpts);
        //‚load index
-       g.jrnPath=env_getpath(cJournal);
-       g.jrnExt=env_getExt(cJournal);
-       g.indexPath=g.jrnPath+g.jrnExt+'.index';
-       g.lAnzs=tree_xml2tree(g.indexPath
-                            :%pAddr(index_XMLinput));
-       if g.lAnzs=*null;
-         pIndex=Tree_getNewItem(%addr(tIndex):%size(tIndex));
-         g.lAnzs=tree_getNewLink(pIndex);
-       endIf;
+       g.lAnzs=tree_getNewLink(Tree_getNewItem(%addr(tIndex):%size(tIndex)));
+       g.jrnPath=env_getJournalPath();
+       g.indexPath=g.jrnPath+'jrn.index';
+       g.lIdx=tree_xml2tree(g.indexPath
+                           :%pAddr(index_XMLinput));
        //‚browse files from folder
        ifs_browseFiles(g.jrnPath:%paddr(procFile));
        //‚Sort elements
@@ -152,29 +148,30 @@
       *
      d lAnz            s               *
      d Anz             ds                  likeDs(tElement) based(pAnz)
+     d lElement        s               *
+     d element         ds                  likeDs(tElement) based(pElement)
        //‚Only take "*.jrn"
-       if %scan('.'+g.jrnExt:wPath)=0;
+       if %scan('.jrn':wPath)=0;
          return;
        endIf;
-       lAnz=tree_getLinkFromList(g.lAnzs:kElement:wPath);
-       if lAnz<>*null;
-         pAnz=tree_getItem(lAnz);
-       //‚Case of a new analysis not yet listed
-       else;
-         pAnz=Tree_getNewItem(%addr(tElement):%size(tElement));
-         anz.ID=wPath;
-         anz.seq=0;
-         tree_linkToParent(g.lAnzs:tree_getNewLink(pAnz));
+       //‚repertori the analysis
+       pAnz=Tree_getNewItem(%addr(tElement):%size(tElement));
+       anz.ID=wPath;
+       tree_linkToParent(g.lAnzs:tree_getNewLink(pAnz));
+       //‚to get the name of the analysis
+       xml_read(g.jrnPath+wPath:%paddr(jrnName):pAnz);
+       //‚is the analysis indexed?
+       lElement=tree_getLinkFromList(g.lIdx:kElement:anz.ID);
+       if lElement<>*null;
+         pElement=tree_getItem(lElement);
+         anz.seq=element.seq;
        endIf;
-       //‚to confirm existance of analysis
-       anz.exists=*on;
-       xml_read(g.jrnPath+wPath:%paddr(ProcNode):pAnz);
      p                 e
       //‚--------------------------------------------------------------------
-      //‚Procedure node
+      //‚journal name
       //‚--------------------------------------------------------------------
-     pProcNode         b
-     d ProcNode        pi              n
+     pjrnName          b
+     d jrnName         pi              n
      d    ND                               likeDs(xml_NodeDefine)
      d    pAnz_                        *   const
       *

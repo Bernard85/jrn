@@ -15,6 +15,7 @@
       /copy cpy,u6msg_h
       /copy cpy,u6screen_h
       /copy cpy,u6screen_s
+      /copy cpy,u6stat_h
       /copy cpy,u6Tree_h
       /copy cpy,u6xml_h
       /copy cpy,u6xView_h
@@ -41,6 +42,7 @@
      d  lJournal                       *
      d  lFiles                         *
      d  lEntries                       *
+     d  lStats                         *
      d  lFilters                       *
      d  hdta                         10i 0
      d  error                          n
@@ -49,7 +51,7 @@
      d  freePartWidth                 3u 0
      d  lVariant_last                  *
       *
-     d  jrnXView       ds                  likeDs(txView) based(pJrnxView)
+     d  jrnXView       ds                  likeDs(tXView) based(pJrnXView)
      d  lJrnXView      s               *
      d  margin         c                   const(4)
       *
@@ -70,12 +72,12 @@
      d lFmtEntry       s               *
      d Column          ds                  likeDs(tColumn) based(pColumn)
        //‚get path for journal analysis
-       g.anzJrnPath=env_getFileName(cJournal:%trim(anzID));
+       g.anzJrnPath=env_getjournalPath()+%trim(anzID)+'.jrn';
        //‚welcome message
        msg_SndPM(pgmID:env_getWelcomeMessage());
        //‚Load special procedure
        int_loadprocs();
-       //‚Load journal                                                         -
+       //‚Load journal
        g.lJournal=tree_xml2tree(g.anzJrnPath:%paddr(jrn_xmlinput));
        pJournal=tree_getItem(g.lJournal);
        g.lEntries=tree_getLinkFromList(g.lJournal:kEntries);
@@ -89,19 +91,19 @@
        jrn_tieEntries(g.lEntries);
        //‚Load function keys
        screen_setFK(A.lFKs:x'31':'1':%pAddr(f1));
+       screen_setFK(A.lFKs:x'32':'1':%pAddr(f2):'F2=Filters');
        screen_setFK(A.lFKs:x'33':'0':%pAddr(F3):'F3=Exit');
        screen_setFK(A.lFKs:x'36':'1':%pAddr(f6):'F6=To left');
        screen_setFK(A.lFKs:x'37':'1':%pAddr(f7):'F7/F19=Left/all');
        screen_setFK(A.lFKs:x'38':'1':%pAddr(f8):'F8/F20=Right/all');
        screen_setFK(A.lFKs:x'3a':'1':%pAddr(f10):'F10=To top');
 
-       screen_setFK(A.lFKs:x'3b':'1':%pAddr(f11):'F11/F23=Filtered/Filter   '
-                                                :'F11/F23=Display all/Filter');
+       screen_setFK(A.lFKs:x'3b':'1':%pAddr(f11):'F11=Filtered   '
+                                                :'F11=Display all');
        screen_setFKcontext(a.lFKs:x'3b':%char(%int(filters.activated)));
 
        screen_setFK(A.lFKs:x'b7':'1':%pAddr(f19));
        screen_setFK(A.lFKs:x'b8':'1':%pAddr(f20));
-       screen_setFK(A.lFKs:x'bb':'1':%pAddr(f23));
        screen_setFK(A.lFKs:x'bc':'1':%pAddr(f24):'F24=Grid');
        screen_setFK(A.lFKs:x'f1':'1':%pAddr(Enter));
        screen_setFK(A.lFKs:x'f4':'1':%pAddr(rollUP));
@@ -114,27 +116,29 @@
        zTL='Work with analysis '
           +journal.text
           +' ['+journal.ID+']';
-       //‚load view for journal (fixed part)                                   -
-       lFmtEntry=fmt_getFormat(a.lFmts:'JRNENTRY');
-       pJrnxView=xview_loadxView(a.lXViews:a.LGrids:lFmtEntry);
+       //‚load view for journal (fixed part)
+       lJrnXView=xview_getXView(a.lXViews:a.LGrids:a.lfmts:'JRNENTRY':'Y');
+       pJrnXView=tree_getItem(lJrnXView);
+       lFmtEntry=jrnXView.lFmt;
        jrnXView.hdrColor=x'22';
        xview_posToMostLeft(jrnXView:%len(xFil)/2);
        xview_sethdrs(jrnXView:0);
-       lJrnXview=tree_getNewLink(pJrnXView);
 
        g.freePartWidth=%len(xFil)-%len(jrnxView.hdrs)-2;
 
        //‚get handle on data journal
-       G.hDta=ifs_openForRead(env_getFileName(cData:%trim(AnzID)));
+       G.hDta=ifs_openForRead(env_getJournalPath()+%trim(AnzID)+'.dta');
        //‚load other views (free part)
        EntriesLoad();
+       //‚load models
+       ModelsLoad();
        //‚position on the left
        f18();
-       //‚work screens                                                        -
+       //‚work screens
        g.pScreen=%pAddr(screen1);
        g.lVariant1=tree_getFirst(g.lEntries);
        wrkScreens();
-       //‚end of program                                                       -
+       //‚end of program
        ifs_Close(g.hDta);
        tree_dealloc(a.lFKs);
        tree_dealloc(g.lJournal);
@@ -146,7 +150,7 @@
      d wrkScreens      pi
       *
      d Screen          pr                  extproc(g.pScreen)
-       //‚loop on screens                                                      -
+       //‚loop on screens
        dow g.pScreen<>*null;
          screen();
        endDo;
@@ -165,6 +169,7 @@
        or g.fRefresh
        or screen_toRefresh();
          zFK=screen_getfkentitle(A.lFKs);
+         loadLabel();
          loadwa1();
        endif;
        //‚refresh the subfile
@@ -173,9 +178,9 @@
        or screen_toRefresh();
          loadSfl1();
        endIf;
-       //‚display the limits                                                 -
+       //‚display the limits
        displayLimits();
-       //‚display activation                                                 -
+       //‚display activation
        write msgCtl;
        write hdr1;
        sflDsp=*on;
@@ -185,7 +190,7 @@
        csrtorow=0;
        csrtocol=0;
        g.error=*off;
-       //‚get/launch function key                                            -
+       //‚get/launch function key
        screen_processFK(pgmID:A.lFKs:wsds.kp:%pAddr(control));
      p                 e
       //‚--------------------------------------------------------------------
@@ -204,6 +209,14 @@
 
          lXView=tree_getNext(lXView);
        endDo;
+     p                 e
+      //‚--------------------------------------------------------------------
+      //‚Load label
+      //‚--------------------------------------------------------------------
+     p loadLabel       b
+       if filters.activated;
+         zLabel=x'2b'+' FILTER ACTIVATED ';
+       endIf;
      p                 e
       //‚--------------------------------------------------------------------
       //‚Load screen work area
@@ -263,15 +276,20 @@
      dfilterValidator  pi             3i 0
      d  lVariant                       *   const
       *
-     d subEntry        ds                  likeDs(tSubEntry) based(pSubEntry)
      d entry           ds                  likeDs(tEntry)    based(pEntry)
-     d lFilterFile     s               *
+     d lJrnEntryFmt    s               *
+     d  JrnEntryFmt    ds                  likeDs(tFormat)based(pJrnEntryFmt)
+     d lFilter         s               *
      d filters         ds                  likeDs(tFilters) based(pFilters)
+     d filter          ds                  likeDs(tFilter) based(pFilter)
+     d lStat           s               *
+     d stat            ds                  likeDs(tStat) based(pStat)
+     d val             s             50a   varying
        //‚No filter input
        if g.lFilters=*null;
          return 1;
        endIf;
-       //‚only entry taken in account for the filter
+       //‚Entry only taken in account for the filter
        if tree_isofthekind(kSubEntry:lVariant);
          return 1;
        else;
@@ -282,12 +300,22 @@
        if not Filters.activated;
          return 1;
        endif;
-       //‚File object omited?
-       lFilterFile=tree_getLinkFromList(g.lFilters:kFilter:'FILE');
-       if lFilterFile<>*null
-       and tree_getLinkFromList(lFilterFile:kOmit:entry.det.obj)<>*null;
-         return 0;
-       endIf;
+       //‚load journal entry format
+       lJrnEntryFmt=fmt_getFormat(a.lFmts:'JRNENTRY':'Y');
+       pjrnEntryFmt=tree_getItem(lJrnEntryFmt);
+       JrnEntryFmt.pBuffer1=%addr(Entry.det);
+       //‚loop on filters
+       lFilter=tree_getFirst(g.lFilters);
+       dow lFilter<>*null;
+         pFilter=tree_getItem(lFilter);
+         lStat=tree_getLinkFromList(g.lStats:kStat:filter.ID);
+         pStat=tree_getItem(lStat);
+         val=int_formulaExec(stat.lFormula);
+         if tree_getLinkFromList(lFilter:kOmit:val)<>*null;
+           return 0;
+         endif;
+         lFilter=tree_getNext(lFilter);
+       endDo;
        return 1;
      p                 e
       //‚--------------------------------------------------------------------
@@ -577,7 +605,7 @@
      d option          s              1a
       *
       /copy cpy,jrnentdp_h
-       //‚loop on each entry                                                 -
+       //‚loop on each entry
        lVariant=tree_getFirst(g.lEntries);
        dow lVariant<>*null;
          option=tree_getOption(lVariant);
@@ -634,6 +662,16 @@
        else;
          msg_SndPM(pgmID:'No displayed column at the specified position');
        endIf;
+     p                 e
+      //‚--------------------------------------------------------------------
+      //‚F2=Filters
+      //‚--------------------------------------------------------------------
+     pf2               b
+     d f2              pi
+     d rtnCode         s              3i 0
+      /copy cpy,filterup_h
+       filterUP(rtncode:g.lStats:g.lFilters);
+       g.fRefresh=*on;
      p                 e
       //‚--------------------------------------------------------------------
       //‚F3=Exit
@@ -736,6 +774,7 @@
      d filters         ds                  likeDS(tFilters) based(pFilters)
        pFilters=tree_getItem(g.lFilters);
        filters.activated=not filters.activated;
+       zLabel='';
        g.fRefresh=*on;
      p                 e
       //‚--------------------------------------------------------------------
@@ -749,8 +788,10 @@
        if g.canTabLeft;
          lXView=tree_getFirst(a.lXViews);
          dow lXView<>*null;
-           pXView=tree_getItem(lXView);
-           xview_posToMostLeft(XView:g.freePartWidth);
+           if lXView<>lJrnXView;
+             pXView=tree_getItem(lXView);
+             xview_posToMostLeft(XView:g.freePartWidth);
+           endIf;
            lXView=tree_getNext(lXView);
          endDo;
          g.fRefresh=*on;
@@ -797,18 +838,6 @@
        else;
         msg_SndPM(pgmID:'Formats displayed are on the most right position');
        endif;
-     p                 e
-      //‚--------------------------------------------------------------------
-      //‚F23=Filter
-      //‚--------------------------------------------------------------------
-     pf23              b
-     d f23             pi
-      /copy cpy,filterup_h
-     d rtnCode         s              3i 0
-       filterUP(rtncode:g.lFiles:'FILE':g.lFilters);
-       if rtnCode=6;
-         g.fRefresh=*on;
-       endIf;
      p                 e
       //‚--------------------------------------------------------------------
       //‚F24=Grid
@@ -859,11 +888,84 @@
            if lFile<>*null;
              pFile=tree_getItem(lFile);
              lFmt=fmt_getFormat(a.lFmts:File.format);
-             entry.lXView=xview_getXView(a.lXViews:a.lGrids:lFmt);
+            entry.lXView=xview_getXView(a.lXViews:a.lGrids:a.lFmts:File.format);
              SubEntriesLoad(lEntry:lFmt:0);
            endif;
          endif;
          lEntry=tree_getNext(lEntry);
+       endDo;
+     p                 e
+      //‚--------------------------------------------------------------------
+      //‚load models
+      //‚--------------------------------------------------------------------
+     pModelsLoad       b
+     d ModelsLoad      pi
+      *
+     d lJrnEntryFmt    s               *
+     d  JrnEntryFmt    ds                  likeDs(tFormat)based(pJrnEntryFmt)
+     d lEntry          s               *
+     d Entry           ds                  likeDs(tEntry) based(pEntry)
+     d lStat           s               *
+     d stat            ds                  likeDS(tStat) based(pStat)
+       //‚load journal entry format
+       lJrnEntryFmt=fmt_getFormat(a.lFmts:'JRNENTRY':'Y');
+       pjrnEntryFmt=tree_getItem(lJrnEntryFmt);
+       //‚load formulas for stat
+       g.lStats=tree_Xml2Tree(env_getAppliPath+'jrnAnzStat.xml'
+                                   :%pAddr(stat_XmlInput));
+       lStat=tree_getFirst(g.lStats);
+       dow lStat<>*null;
+         pStat=tree_getItem(lStat);
+         stat.lFormula=int_FormulaLoad(stat.formula:lJrnEntryFmt);
+         lStat=tree_getNextToDisplay(g.lStats:lStat);
+       endDo;
+       //‚loop on each entries
+       lEntry=tree_getFirst(g.lEntries);
+       dow lEntry<>*null;
+         pEntry=tree_getItem(lEntry);
+         JrnEntryFmt.pBuffer1=%addr(Entry.det);
+         ModelsLoad2(*null:g.lStats);
+         lEntry=tree_getNext(lEntry);
+       endDo;
+     p                 e
+      //‚--------------------------------------------------------------------
+      //‚load models (part 2)
+      //‚--------------------------------------------------------------------
+     pModelsLoad2      b
+     d ModelsLoad2     pi
+     d  lModels_                       *   const
+     d  lStats                         *   const
+      *
+     d  lModels        s               *
+     d  lModel         s               *
+     d  lStat          s               *
+     d  stat           ds                  likeDS(tStat)  based(pStat)
+     d  model          ds                  likeDS(tModel) based(pModel)
+     d  modelID        s             50a   varying
+       lStat=tree_getFirst(lStats);
+       dow lStat<>*null;
+         pStat=tree_getItem(lStat);
+         if lModels_<>*null;
+           lModels=lModels_;
+         elseif Stat.lModels<>*null;
+           lModels=Stat.lModels;
+         else;
+           stat.lModels=tree_getNewLink(*null);
+           lModels=Stat.lModels;
+         endIf;
+         modelID=int_formulaExec(stat.lFormula);
+         lModel=tree_getLinkFromList(lModels:kModel:modelID);
+         if lModel=*null;
+           pModel=tree_getNewItem(%addr(tModel):%size(tModel));
+           model.ID=modelID;
+           model.statID=Stat.ID;
+           tree_linkToParent(lModels:tree_getNewLink(pModel));
+         else;
+           pModel=tree_getItem(lModel);
+         endIf;
+         model.count+=1;
+         modelsLoad2(stat.lModels:lStat);
+         lStat=tree_getNext(lStat);
        endDo;
      p                 e
       //‚--------------------------------------------------------------------
@@ -900,7 +1002,7 @@
          if lFormat<>*null;
           if tree_getLinkFromList(lFormat:kFields)<>*null;
             pSubEntry=tree_getNewItem(%addr(tSubEntry):%size(tSubEntry));
-            SubEntry.lXView=xview_getXView(a.lXViews:a.lGrids:lFormat);
+            SubEntry.lXView=xview_getXView(a.lXViews:a.lGrids:a.lfmts:formatID);
             SubEntry.pos=subFormat.pos+pos;
             SubEntry.fmtID=formatID;
             tree_linktoparent(lEntry:tree_getnewlink(pSubEntry));

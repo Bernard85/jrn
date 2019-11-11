@@ -78,12 +78,12 @@
        screen_setFK(g.lFKs:x'f4':*ON :%pAddr(rollUP  ));
        screen_setFK(g.lFKs:x'f5':*ON :%pAddr(rolldown));
        zFK=screen_getfkentitle(g.lFKs);
-       //‚load grid                                                            -
-       g.lGrid=tree_xml2tree(env_getFileName(cGrid:g.gridID)
+       //‚load grid
+       g.lGrid=tree_xml2tree(env_getClientPath()+g.gridID+'.grid'
                             :%paddr(grid_xmlinput));
-       //‚work screens                                                        -
+       //‚work screens
        wrkScreen();
-       //‚end of program                                                       -
+       //‚end of program
        *inlr=*on;
       //‚--------------------------------------------------------------------
       //‚work screen
@@ -253,7 +253,7 @@
      pf3               b
      d f3              pi
        f20();
-       xml_tree2xml(env_getFileName(cGrid:g.gridID)
+       xml_tree2xml(env_getClientPath()+g.gridID+'.grid'
                    :g.lGrid
                    :%paddr(grid_XmlOutput));
        g.screen=0;

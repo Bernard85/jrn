@@ -53,7 +53,7 @@
          tree_linkToparent(lJournal:lEntries);
 
          //‚open file
-         G.hDta=ifs_openforStore(env_getFileName(cData   :savID));
+         G.hDta=ifs_openforStore(env_getjournalPath()+savID+'.dta');
          //‚journal declaration
          dow ApiErr.BytAvl=0;
            pEH=%Addr(JH)+Jh.OfsEH;
@@ -80,7 +80,7 @@
          enddo;
          //‚close file
          ifs_close(G.hDta);
-         xml_tree2XML(env_getFileName(cJournal:savID)
+         xml_tree2XML(env_getJournalPath()+savID+'.jrn'
                      :lJournal
                      :%pAddr(jrn_XMLoutput));
        endif;

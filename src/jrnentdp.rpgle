@@ -326,7 +326,7 @@
        //‚CONTEXT=DISPLAY JOURNAL DATA
        if screen_getFKcontext(a.lFKs:x'39')='1';
          //‚get the format
-         lYView=yview_getYView(lYViews:lForms:lFmts:'JRNENTRY');
+         lYView=yview_getYView(lYViews:lForms:lFmts:'JRNENTRY':'Y');
          pYView=tree_getItem(lYView);
          pFmt=tree_getitem(YView.lFmt);
          //‚get the entry

@@ -1,14 +1,15 @@
-     A*%%TS  SD  20190905  082934  BERNARD85   REL-V7R1M0  5770-WDS
+     A*%%TS  SD  20191026  114135  BERNARD85   REL-V7R1M0  5770-WDS
      A*%%EC
      A                                      DSPSIZ(27 132 *DS4)
      A                                      CHGINPDFT(UL)
      A          R HDR1
-     A*%%TS  SD  20190831  153523  BERNARD85   REL-V7R1M0  5770-WDS
+     A*%%TS  SD  20191026  114135  BERNARD85   REL-V7R1M0  5770-WDS
      A                                      OVERLAY
      A            ZTL          131A  O  1  2DSPATR(HI)
      A                                  3  2'Type options, press Enter.'
      A                                      COLOR(BLU)
      A            ZCH          125A  O  4  3COLOR(BLU)
+     A            ZLABEL        19   O  2114
      A          R SFL1                      SFL
      A  02                                  SFLNXTCHG
      A  01        XFIL1        131A  O  6  2DSPATR(HI)

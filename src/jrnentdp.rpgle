@@ -24,7 +24,6 @@
      d  zTL_                        131a
      d  lVariant                       *
      d  hDta                         10i 0
-     d  lFiles                         *
      d  lYViews                        *
      d  lFmts                          *
      d  lForms                         *
@@ -47,13 +46,15 @@
      d  lFile          s               *
      d  file           ds                  likeDs(tFile) based(pFile)
      d  fmt            ds                  likeDs(tFormat) based(pFmt)
+     d  Entry          ds                  likeDs(tEntry) based(pEntry)
+     d  subEntry       ds                  likeDs(tSubEntry) based(pSubEntry)
        //‚title
        zTL=zTL_;
        //‚Load function keys
        screen_setFK(a.lFKs:x'f1':'0':%pAddr(Enter));
        screen_setFK(a.lFKs:x'33':'0':%pAddr(F3):'F3=Exit');
-       screen_setFK(a.lFKs:x'39':'0':%paddr(F9):'F9=Journal':'F9=Data   ');
-       screen_setFKcontext(a.lFKs:x'39':%char(%int(option='j')));
+         screen_setFK(a.lFKs:x'39':'0':%paddr(F9):'F9=Journal':'F9=Data   ');
+         screen_setFKcontext(a.lFKs:x'39':%char(%int(option='j')));
        screen_setFK(a.lFKs:x'3a':'0':%pAddr(f10):'F10=Move top');
        screen_setFK(a.lFKs:x'3b':'0':*null:'F11=Formula':'F11=Value');
        screen_setFK(a.lFKs:x'f4':'0':%pAddr(rollUP));
@@ -109,6 +110,14 @@
        msg_rmvPM(pgmID);
        csrtorow=0;
        csrtocol=0;
+       //‚F9 check if data are avalaible
+       if *inki and option='j'
+       and (tree_isofthekind(kEntry:lVariant:pEntry) and entry.lYView=*null
+       or tree_isofthekind(kSubEntry:lVariant:pSubEntry)
+                                                    and subEntry.lYView=*null);
+         msg_SndPM(pgmID:'No data could be display');
+         return;
+       endIf;
        //‚get/launch function key
        screen_processFK(pgmID:a.lFKs:wsds.kp:*null);
      p                 e
@@ -342,9 +351,7 @@
        elseif screen_getFKcontext(a.lFKs:x'39')='0'
        and tree_isofthekind(kEntry:lVariant:pEntry);
          //‚get the file/format
-         lFile=tree_getLinkFromList(lFiles:kFile:entry.det.obj);
-         pfile=tree_getItem(lFile);
-         lYView=yview_getYView(lYViews:lForms:lFmts:file.format);
+         lYView=Entry.lYView;
          pYView=tree_getItem(lYView);
          //‚get corresponding data
          pFmt=tree_getitem(YView.lFmt);
@@ -359,7 +366,7 @@
        elseif screen_getFKcontext(a.lFKs:x'39')='0'
        and tree_isofthekind(kSubEntry:lVariant:pSubEntry);
          pEntry=tree_getItem(tree_getParent(lVariant));
-         lYView=yview_getYView(lYViews:lForms:lFmts:SubEntry.fmtID);
+         lYView=SubEntry.lYView;
          pYView=tree_getItem(lYView);
          pFmt=tree_getitem(YView.lFmt);
          ifs_lseek(hDta:Entry.det.apos+subEntry.Pos:0);

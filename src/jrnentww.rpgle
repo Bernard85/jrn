@@ -3,7 +3,7 @@
       /endif
      FJRNENTWWd CF   E             WORKSTN SFILE(SFL1:SFlRRN1) InfDS(wsDS)
 
-      /copy cpy,u6Ibm_h
+      /copy cpy,u6ibm_h
       /copy cpy,u6env_h
       /copy cpy,u6filter_h
       /copy cpy,u6file_h
@@ -16,9 +16,10 @@
       /copy cpy,u6screen_h
       /copy cpy,u6screen_s
       /copy cpy,u6stat_h
-      /copy cpy,u6Tree_h
+      /copy cpy,u6tree_h
       /copy cpy,u6xml_h
-      /copy cpy,u6xView_h
+      /copy cpy,u6xview_h
+      /copy cpy,u6yview_h
 
       //˜Anchors
      D A               DS                  qualified
@@ -57,6 +58,7 @@
       *
      d  tItem          ds                  qualified
      d   lXView                        *
+     d   lYView                        *
      d   lVariant                      *
       *
      d  journal        ds                  likeDs(tJournal) based(pJournal)
@@ -226,6 +228,8 @@
      d lVariant        s               *
      d NO              s              3u 0 inz(0)
      d lXview          s               *
+     d lYview          s               *
+     d lXview$         s               *
        clear g.Item;
        lVariant=tree_getCurrent(g.lVariant1:%pAddr(filterValidator));
        dow lVariant<>*null;
@@ -236,12 +240,13 @@
          //‚store view+entry
          NO+=1;
          g.lVariant9=lVariant;
-         if breakOnXView(lXView:lVariant);
+         if breakOnXView(lXView:lYView:lXView$:lVariant);
            g.Item(no).lVariant=lXView;
            g.Item(no).lXView=lXView;
          else;
            g.Item(no).lVariant=lVariant;
-           g.Item(no).lXView=lXView;
+           g.Item(no).lXView=lXView$;
+           g.Item(no).lYView=lYView;
            lVariant=
            tree_getNextToDisplay(g.lEntries:lVariant:%pAddr(filterValidator));
          endIf;
@@ -253,14 +258,17 @@
      pbreakOnXView     b
      d breakOnXView    pi              n
      d  lXView                         *
+     d  lYView                         *
+     d  lXView$                        *
      d  lVariant                       *   const
       *
      d entry           ds                  likeDS(tEntry)    based(pEntry)
      d subEntry        ds                  likeDS(tSubEntry) based(pSubEntry)
-     d lXView$         s               *
        if tree_isofthekind(kEntry:lVariant:pEntry);
+         lYView=Entry.lYView;
          lXView$=Entry.lXView;
        elseif tree_isofthekind(kSubEntry:lVariant:pSubEntry);
+         lYView=SubEntry.lYView;
          lXView$=SubEntry.lXView;
        endIf;
        if lXView$<>*null and lXView<>lXView$;
@@ -325,7 +333,7 @@
      d loadSFl1        pi
       *
      d lVariant        s               *
-     d  XView          ds                  likeDs(tXview) based(pXview)
+     d lXView          s               *
      d fCase           s              3i 0
        //‚clear subfile
        sflDsp=*off;
@@ -346,7 +354,7 @@
          if lVariant=*null;
            leave;
          endif;
-         pXView=tree_getItem(g.Item(sflRrn1).lXView);
+         lXView=g.Item(sflRrn1).lXView;
          if tree_isofthekind(kXView:lVariant);
            //‚1) Load headers
            *in01=*on;
@@ -360,7 +368,7 @@
            //‚4) journal part
            loadSFL1c(lVariant:fCase);
            //‚5) data part
-           loadSFL1d(XView:lVariant:fCase);
+           loadSFL1d(lXView:lVariant:fCase);
          endIf;
          write sfl1;
        endFor;
@@ -390,8 +398,9 @@
        if sflrrn1=1;
          xFil1='Opt'+jrnXView.hdrs;
        endif;
-       %subst(xfil1:%len(jrnXView.hdrs)+4)
-       =x'22'+'|'+xview_setHdrs(XView:%len(jrnXView.hdrs)+2);
+       %subst(xfil1:%len(jrnXView.hdrs)+4)=x'22'+'|';
+       %subst(xfil1:%len(jrnXView.hdrs)+6)
+       =xview_setHdrs(XView:%len(jrnXView.hdrs)+2);
        g.canTabRight=g.canTabRight or not XView.right.most;
        g.canTabLeft =g.canTabLeft  or not XView.Left.most;
      p                 e
@@ -429,21 +438,27 @@
          endif;
          loadSFC1(jrnXView:xFil:fCase);
        endIf;
+       %subst(xfil:%len(jrnXView.hdrs)+1)=x'22'+'|';
      p                 e
       //‚--------------------------------------------------------------------
       //‚Load data part
       //‚--------------------------------------------------------------------
      ploadSFl1D        b
      d loadSFl1D       pi
-     d  xView                              const likeDs(tXView)
+     d  lXView                         *   const
      d  lVariant                       *   const
      d  fCase                         3i 0 const
       *
+     d XView           ds                  likeDs(tXView) based(pXView)
      d fmt             ds                  likeds(tFormat) based(pFmt)
      d entry           ds                  likeDs(tEntry) based(pEntry)
      d entry0          ds                  likeDs(tEntry) based(pEntry0)
      d subEntry        ds                  likeDs(tSubEntry) based(pSubEntry)
      d pos             s             10u 0
+       if lXView=*null;
+         return;
+       endIf;
+       pXView=tree_getItem(g.Item(sflRrn1).lXView);
        pFmt=tree_getItem(xView.lFmt);
        if tree_isofthekind(kEntry:lVariant:pEntry);
          pos=0;
@@ -451,7 +466,6 @@
          pEntry=tree_getItem(tree_getParent(lVariant));
          pos=subEntry.pos;
        endIf;
-       %subst(xfil:%len(jrnXView.hdrs)+1)=x'22'+'|';
        ifs_lseek(g.hDta:entry.det.apos+pos:0);
        ifs_read(g.hDta:Fmt.pBuffer1:Fmt.len);
        if Entry.pEntry0<>*null;
@@ -538,12 +552,21 @@
       //‚--------------------------------------------------------------------
      pControl          b
      d Control         pi              n
+      *
+     d lVariant        s               *
+     d entry           ds                  likeDS(tEntry)    based(pEntry)
+     d subEntry        ds                  likeDS(tSubEntry) based(pSubEntry)
        readc sfl1;
        dow not %eof();
          *in02=*off;
          if %scan(xCho:' 5j')=0;
-           g.error=*on;
            msg_SndPM(pgmID:'Option "'+xCho+'" is not valid');
+           g.error=*on;
+           *in02=*on;
+         elseif xCho='5'
+         and    g.item(sflrrn1).lYView=*null;
+           msg_SndPM(pgmID:'Option "'+xCho+'" is not valid');
+           g.error=*on;
            *in02=*on;
          endif;
          update sfl1;
@@ -560,6 +583,8 @@
       *
      d lVariant        s               *
      d lXView          s               *
+     d lYView          s               *
+     d lXView$         s               *
      d NO              s              3u 0 inz(0)
        if tree_getPrevToDisplay(g.lEntries:g.lVariant1:%pAddr(filterValidator))
        =*null;
@@ -573,7 +598,7 @@
            return;
          endif;
          g.lVariant1=lVariant;
-         if breakOnXView(lXView:lVariant);
+         if breakOnXView(lXView:lYView:lXView$:lVariant);
            no+=1;
          else;
            no+=1;
@@ -615,7 +640,7 @@
                    :ztl
                    :lVariant
                    :g.hDta
-                   :g.lFiles:a.lYViews:a.lFmts:a.lForms);
+                   :a.lYViews:a.lFmts:a.lForms);
          g.lVariant_last=lVariant;
            if rtnCode>0;
              tree_setOption(lVariant:'');
@@ -889,6 +914,7 @@
              pFile=tree_getItem(lFile);
              lFmt=fmt_getFormat(a.lFmts:File.format);
             entry.lXView=xview_getXView(a.lXViews:a.lGrids:a.lFmts:File.format);
+            entry.lYView=yview_getYView(a.lYViews:a.lForms:a.lFmts:File.format);
              SubEntriesLoad(lEntry:lFmt:0);
            endif;
          endif;
@@ -1003,6 +1029,7 @@
           if tree_getLinkFromList(lFormat:kFields)<>*null;
             pSubEntry=tree_getNewItem(%addr(tSubEntry):%size(tSubEntry));
             SubEntry.lXView=xview_getXView(a.lXViews:a.lGrids:a.lfmts:formatID);
+            SubEntry.lYView=yview_getYView(a.lYViews:a.lForms:a.lfmts:formatID);
             SubEntry.pos=subFormat.pos+pos;
             SubEntry.fmtID=formatID;
             tree_linktoparent(lEntry:tree_getnewlink(pSubEntry));

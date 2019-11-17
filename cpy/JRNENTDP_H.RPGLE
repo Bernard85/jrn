@@ -4,7 +4,6 @@
      d  ztl                         131
      d  lVariant                       *
      d  hDta                         10i 0
-     d  lFiles                         *
      d  lYViews                        *
      d  lFmts                          *
      d  lForms                         *

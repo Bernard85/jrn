@@ -51,6 +51,7 @@
      d  CanTabLeft                     n   inz(*on)
      d  freePartWidth                 3u 0
      d  lVariant_last                  *
+     d  fSubEntries                    n
       *
      d  jrnXView       ds                  likeDs(tXView) based(pJrnXView)
      d  lJrnXView      s               *
@@ -91,6 +92,24 @@
        endIf;
        pFilters=tree_getItem(g.lFilters);
        jrn_tieEntries(g.lEntries);
+       //‚load view for journal (fixed part)
+       lJrnXView=xview_getXView(a.lXViews:a.LGrids:a.lfmts:'JRNENTRY':'Y');
+       pJrnXView=tree_getItem(lJrnXView);
+       lFmtEntry=jrnXView.lFmt;
+       jrnXView.hdrColor=x'22';
+       xview_posToMostLeft(jrnXView:%len(xFil)/2);
+       xview_sethdrs(jrnXView:0);
+
+       g.freePartWidth=%len(xFil)-%len(jrnxView.hdrs)-2;
+
+       //‚get handle on data journal
+       G.hDta=ifs_openForRead(env_getJournalPath()+%trim(AnzID)+'.dta');
+       //‚load other views (free part)
+       EntriesLoad();
+       //‚load models
+       ModelsLoad();
+       //‚position on the left
+       f18();
        //‚Load function keys
        screen_setFK(A.lFKs:x'31':'1':%pAddr(f1));
        screen_setFK(A.lFKs:x'32':'1':%pAddr(f2):'F2=Filters');
@@ -113,29 +132,15 @@
        //‚Load options
        screen_SetOption(A.lOpts:'5':'5=Data');
        screen_SetOption(A.lOpts:'j':'j=Journal');
+       if g.fSubEntries;
+         screen_SetOption(A.lOpts:'d':'d=develop');
+         screen_SetOption(A.lOpts:'r':'r=reduce');
+       endIf;
        zCH=screen_getChoicesEntitle(A.lOpts);
        //‚Title display
        zTL='Work with analysis '
           +journal.text
           +' ['+journal.ID+']';
-       //‚load view for journal (fixed part)
-       lJrnXView=xview_getXView(a.lXViews:a.LGrids:a.lfmts:'JRNENTRY':'Y');
-       pJrnXView=tree_getItem(lJrnXView);
-       lFmtEntry=jrnXView.lFmt;
-       jrnXView.hdrColor=x'22';
-       xview_posToMostLeft(jrnXView:%len(xFil)/2);
-       xview_sethdrs(jrnXView:0);
-
-       g.freePartWidth=%len(xFil)-%len(jrnxView.hdrs)-2;
-
-       //‚get handle on data journal
-       G.hDta=ifs_openForRead(env_getJournalPath()+%trim(AnzID)+'.dta');
-       //‚load other views (free part)
-       EntriesLoad();
-       //‚load models
-       ModelsLoad();
-       //‚position on the left
-       f18();
        //‚work screens
        g.pScreen=%pAddr(screen1);
        g.lVariant1=tree_getFirst(g.lEntries);
@@ -369,6 +374,11 @@
            loadSFL1c(lVariant:fCase);
            //‚5) data part
            loadSFL1d(lXView:lVariant:fCase);
+           //‚6) To avoid no displayable characters
+           xfil=int_chkDisplay(Min+Maj+num+spec+spec2+colors+' '
+                              :xfil);
+           //‚7) Sub-format?
+           *in03=tree_getFirst(lVariant)<>*null;
          endIf;
          write sfl1;
        endFor;
@@ -559,8 +569,14 @@
        readc sfl1;
        dow not %eof();
          *in02=*off;
-         if %scan(xCho:' 5j')=0;
+         if %scan(xCho:' 5jdr')=0;
            msg_SndPM(pgmID:'Option "'+xCho+'" is not valid');
+           g.error=*on;
+           *in02=*on;
+         elseif %scan(xCho:'dr')>0
+         and tree_getfirst(g.Item(sflRrn1).lVariant)=*null;
+           msg_SndPM(pgmID:'Option "'+xCho
+                          +'" is only valid on entry with sub-format');
            g.error=*on;
            *in02=*on;
          elseif xCho='5'
@@ -569,6 +585,7 @@
            g.error=*on;
            *in02=*on;
          endif;
+         *in03=tree_getFirst(g.Item(sflRrn1).lVariant)<>*null;
          update sfl1;
          tree_setOption(g.Item(sflRrn1).lVariant:xCho);
          readc sfl1;
@@ -634,14 +651,24 @@
        lVariant=tree_getFirst(g.lEntries);
        dow lVariant<>*null;
          option=tree_getOption(lVariant);
-         if %scan(option:'5j')>0;
+         if option='r';
+           tree_closeLink(lVariant);
+           g.fRefresh=*on;
+           tree_setOption(lVariant:'');
+           g.lVariant_last=lVariant;
+         elseif option='d';
+           tree_openLink(lVariant);
+           g.fRefresh=*on;
+           tree_setOption(lVariant:'');
+           g.lVariant_last=lVariant;
+         elseif %scan(option:'5j')>0;
            g.fRefresh=*on;
            jrnEntDp(rtncode:option
                    :ztl
                    :lVariant
                    :g.hDta
                    :a.lYViews:a.lFmts:a.lForms);
-         g.lVariant_last=lVariant;
+           g.lVariant_last=lVariant;
            if rtnCode>0;
              tree_setOption(lVariant:'');
            elseif rtnCode=0;
@@ -1027,12 +1054,14 @@
          lFormat=fmt_getFormat(a.lFmts:formatID);
          if lFormat<>*null;
           if tree_getLinkFromList(lFormat:kFields)<>*null;
+            g.fSubEntries=*on;
             pSubEntry=tree_getNewItem(%addr(tSubEntry):%size(tSubEntry));
             SubEntry.lXView=xview_getXView(a.lXViews:a.lGrids:a.lfmts:formatID);
             SubEntry.lYView=yview_getYView(a.lYViews:a.lForms:a.lfmts:formatID);
             SubEntry.pos=subFormat.pos+pos;
             SubEntry.fmtID=formatID;
             tree_linktoparent(lEntry:tree_getnewlink(pSubEntry));
+            tree_closeLink(lEntry);
           endIf;
           SubEntriesLoad(lEntry:lFormat:subFormat.pos+pos);
          endIf;

@@ -61,6 +61,7 @@
      d   lXView                        *
      d   lYView                        *
      d   lVariant                      *
+     d   lReal                         *
       *
      d  journal        ds                  likeDs(tJournal) based(pJournal)
      d filters         ds                  likeds(tFilters) based(pFilters)
@@ -105,9 +106,9 @@
        //‚get handle on data journal
        G.hDta=ifs_openForRead(env_getJournalPath()+%trim(AnzID)+'.dta');
        //‚load other views (free part)
-       EntriesLoad();
+       loadEntries();
        //‚load models
-       ModelsLoad();
+       loadModels();
        //‚position on the left
        f18();
        //‚Load function keys
@@ -197,6 +198,7 @@
        csrtorow=0;
        csrtocol=0;
        g.error=*off;
+       g.lVariant_last=*null;
        //‚get/launch function key
        screen_processFK(pgmID:A.lFKs:wsds.kp:%pAddr(control));
      p                 e
@@ -231,41 +233,73 @@
      p loadwa1         b
       *
      d lVariant        s               *
+     d lParent         s               *
      d NO              s              3u 0 inz(0)
+     d NO1             s              3u 0 inz(0)
      d lXview          s               *
      d lYview          s               *
      d lXview$         s               *
+     d wItem           ds                  likeDs(tItem)
+       //‚clear the work area of items
        clear g.Item;
-       lVariant=tree_getCurrent(g.lVariant1:%pAddr(filterValidator));
+       //‚Take the item validated
+       lVariant=tree_getCurrent(g.lEntries:g.lVariant1:%pAddr(filterValidator));
+       //‚Display ancestors
+       lParent=tree_getParent(lVariant);
+       dow lParent<>g.lEntries;
+         NO=tree_getLevel(lParent)-tree_getLevel(g.lEntries);
+         g.item(NO).lVariant=lParent;
+         g.item(NO).lReal   =lParent;
+         lParent=tree_getParent(lParent);
+       endDo;
+       NO=tree_getLevel(lVariant)-tree_getLevel(g.lEntries);
+       //‚Display brothers and childs
        dow lVariant<>*null;
          //‚Check if enought row remains
-         if NO=20;
+         if NO>20;
            leave;
          endif;
          //‚store view+entry
-         NO+=1;
          g.lVariant9=lVariant;
-         if breakOnXView(lXView:lYView:lXView$:lVariant);
+         if breakOnXView(lVariant:lXView:lYView:lXView$);
            g.Item(no).lVariant=lXView;
+           g.Item(no).lReal   =lVariant;
            g.Item(no).lXView=lXView;
          else;
            g.Item(no).lVariant=lVariant;
+           g.Item(no).lReal   =lVariant;
            g.Item(no).lXView=lXView$;
            g.Item(no).lYView=lYView;
            lVariant=
            tree_getNextToDisplay(g.lEntries:lVariant:%pAddr(filterValidator));
          endIf;
+         NO+=1;
        endDo;
+       //‚to force grid on 1st row
+       for no=1 to 20;
+         if tree_isofthekind(kXView:g.Item(no).lVariant);
+           no1=no;
+           wItem=g.Item(no);
+           leave;
+         endIf;
+       endFor;
+       if NO1=0;
+         return;
+       endIf;
+       for no=no1 downto 2;
+         g.Item(no)=g.Item(no-1);
+       endFor;
+       g.item(1)=wItem;
      p                 e
       //‚--------------------------------------------------------------------
       //‚break on XView
       //‚--------------------------------------------------------------------
      pbreakOnXView     b
      d breakOnXView    pi              n
+     d  lVariant                       *   const
      d  lXView                         *
      d  lYView                         *
      d  lXView$                        *
-     d  lVariant                       *   const
       *
      d entry           ds                  likeDS(tEntry)    based(pEntry)
      d subEntry        ds                  likeDS(tSubEntry) based(pSubEntry)
@@ -289,6 +323,7 @@
      dfilterValidator  pi             3i 0
      d  lVariant                       *   const
       *
+     d  lParent        s               *
      d entry           ds                  likeDs(tEntry)    based(pEntry)
      d lJrnEntryFmt    s               *
      d  JrnEntryFmt    ds                  likeDs(tFormat)based(pJrnEntryFmt)
@@ -298,6 +333,12 @@
      d lStat           s               *
      d stat            ds                  likeDs(tStat) based(pStat)
      d val             s             50a   varying
+       //‚Check ancestors
+       lParent=tree_getParent(lVariant);
+       if  lParent<>g.lEntries
+       and not tree_isOpen(lParent);
+         return 0;
+       endIf;
        //‚No filter input
        if g.lFilters=*null;
          return 1;
@@ -337,9 +378,11 @@
      ploadSFl1         b
      d loadSFl1        pi
       *
+     d fJrnHdrs        s               n   inz(*off)
      d lVariant        s               *
      d lXView          s               *
      d fCase           s              3i 0
+     d section         ds                  likeDs(tSection) based(pSection)
        //‚clear subfile
        sflDsp=*off;
        sflClr=*on;
@@ -354,18 +397,24 @@
        endif;
        //‚load the subfile according to the work table
        for sflRrn1=1 to 20;
-         //‚Leave if no item
          lVariant=g.Item(sflRrn1).lVariant;
+         xFil='';
+         xFil1='';
+         //‚Leave if no item
          if lVariant=*null;
            leave;
-         endif;
-         lXView=g.Item(sflRrn1).lXView;
-         if tree_isofthekind(kXView:lVariant);
+         elseif tree_isofthekind(kSection:lVariant:pSection);
+           *in01=*off;
+           *in03=*on;
+           xCho=tree_getOption(lVariant);
+           %subst(xfil:%len(jrnXView.hdrs)+1)=x'22'+'|'+x'39'+section.text;
+         elseif tree_isofthekind(kXView:lVariant);
            //‚1) Load headers
            *in01=*on;
-           loadSFL1A(lVariant);
+           loadSFL1A(lVariant:fJrnHdrs);
          else;
            *in01=*off;
+           lXView=g.Item(sflRrn1).lXView;
            //‚2) Load option
            loadSFL1B(lVariant);
            //‚3) Determine if the current entry is linked to another
@@ -397,6 +446,7 @@
      ploadSFl1A        b
      d loadSFl1A       pi
      d  lVariant                       *   const
+     d  fJrnHdrs                       n
       *
      d xView           ds                  likeDs(tXView)  based(pXView)
        //‚Load line according to the kind of corresponding item
@@ -404,8 +454,8 @@
          return;
        endIf;
        //‚header
-       xFil1='';
-       if sflrrn1=1;
+       if not fJrnHdrs;
+         fJrnHdrs=*on;
          xFil1='Opt'+jrnXView.hdrs;
        endif;
        %subst(xfil1:%len(jrnXView.hdrs)+4)=x'22'+'|';
@@ -576,11 +626,11 @@
          elseif %scan(xCho:'dr')>0
          and tree_getfirst(g.Item(sflRrn1).lVariant)=*null;
            msg_SndPM(pgmID:'Option "'+xCho
-                          +'" is only valid on entry with sub-format');
+                    +'" is only valid on section or entry with sub-format');
            g.error=*on;
            *in02=*on;
-         elseif xCho='5'
-         and    g.item(sflrrn1).lYView=*null;
+         elseif xCho='5' and g.item(sflrrn1).lYView=*null
+         or xCho='j' and tree_isofthekind(kSection:g.item(sflrrn1).lVariant);
            msg_SndPM(pgmID:'Option "'+xCho+'" is not valid');
            g.error=*on;
            *in02=*on;
@@ -610,15 +660,16 @@
        endIf;
        lVariant
        =tree_getPrevtoDisplay(g.lEntries:g.lVariant1:%pAddr(filterValidator));
+       no=20;
        dow lVariant<>*null;
-         if no=20;
+         if no<tree_getLevel(lVariant)-tree_getLevel(g.lEntries);
            return;
          endif;
          g.lVariant1=lVariant;
-         if breakOnXView(lXView:lYView:lXView$:lVariant);
-           no+=1;
+         if breakOnXView(lVariant:lXView:lYView:lXView$);
+           no-=1;
          else;
-           no+=1;
+           no-=1;
            lVariant
            =tree_getPrevtoDisplay(g.lEntries:lVariant:%pAddr(filterValidator));
          endif;
@@ -769,7 +820,8 @@
      d XView           ds                  likeDs(tXView) based(pXView)
        csrtorow=wsds.csrfromrow;
        csrtocol=wsds.csrfromcol;
-       if SFLCSRRRN=0 or g.Item(1).lVariant=*null;
+       if SFLCSRRRN=0
+       or g.item(SFLCSRRRN).lXView=*null;
          msg_SndPM(pgmID:'Wrong cursor position');
        else;
          csrtocol=3;
@@ -791,7 +843,8 @@
      d XView           ds                  likeDs(tXView) based(pXView)
        csrtorow=wsds.csrfromrow;
        csrtocol=wsds.csrfromcol;
-       if SFLCSRRRN=0 or g.Item(1).lVariant=*null;
+       if SFLCSRRRN=0
+       or g.item(SFLCSRRRN).lXView=*null;
          msg_SndPM(pgmID:'Wrong cursor position');
        else;
          csrtocol=3;
@@ -811,10 +864,8 @@
      d f10             pi
        if SFLCSRRRN=0 or g.Item(1).lVariant=*null;
          msg_SndPM(pgmID:'Wrong cursor position');
-       elseif tree_getKind(g.Item(sflcsrrrn).lVariant)=kXView;
-         g.lVariant1=g.Item(sflcsrrrn+1).lVariant;
        else;
-         g.lVariant1=g.Item(sflcsrrrn).lVariant;
+         g.lVariant1=g.Item(sflcsrrrn).lReal;
        endIf;
      p                 e
       //‚--------------------------------------------------------------------
@@ -922,110 +973,37 @@
       //‚--------------------------------------------------------------------
       //‚Entries load
       //‚--------------------------------------------------------------------
-     pEntriesLoad      b
-     d EntriesLoad     pi
-     d lEntry          s               *
+     ploadEntries      b
+     d loadEntries     pi
+     d lVariant        s               *
      d Entry           ds                  likeDs(tEntry) based(pEntry)
      d lFile           s               *
      d File            ds                  likeDs(tFile) based(pFile)
      d lFmt            s               *
        //‚Files are loaded from analysis
-       lEntry=tree_getFirst(g.lEntries);
-       dow lEntry<>*null;
-         pEntry=tree_getItem(lEntry);
-         if entry.det.code='R' and entry.det.entt<>'IL';
+       lVariant=tree_getFirst(g.lEntries);
+       dow lVariant<>*null;
+         if  tree_isofthekind(kEntry:lVariant:pEntry)
+         and entry.det.code='R' and entry.det.entt<>'IL';
            //‚Files are loaded from object
            lFile=file_getFile(g.lFiles:%trim(entry.det.obj));
            //‚Load the corresponding XVIew
            if lFile<>*null;
-             pFile=tree_getItem(lFile);
-             lFmt=fmt_getFormat(a.lFmts:File.format);
+            pFile=tree_getItem(lFile);
+            lFmt=fmt_getFormat(a.lFmts:File.format);
             entry.lXView=xview_getXView(a.lXViews:a.lGrids:a.lFmts:File.format);
             entry.lYView=yview_getYView(a.lYViews:a.lForms:a.lFmts:File.format);
-             SubEntriesLoad(lEntry:lFmt:0);
+            loadSubEntries(lVariant:lFmt:0);
            endif;
          endif;
-         lEntry=tree_getNext(lEntry);
-       endDo;
-     p                 e
-      //‚--------------------------------------------------------------------
-      //‚load models
-      //‚--------------------------------------------------------------------
-     pModelsLoad       b
-     d ModelsLoad      pi
-      *
-     d lJrnEntryFmt    s               *
-     d  JrnEntryFmt    ds                  likeDs(tFormat)based(pJrnEntryFmt)
-     d lEntry          s               *
-     d Entry           ds                  likeDs(tEntry) based(pEntry)
-     d lStat           s               *
-     d stat            ds                  likeDS(tStat) based(pStat)
-       //‚load journal entry format
-       lJrnEntryFmt=fmt_getFormat(a.lFmts:'JRNENTRY':'Y');
-       pjrnEntryFmt=tree_getItem(lJrnEntryFmt);
-       //‚load formulas for stat
-       g.lStats=tree_Xml2Tree(env_getAppliPath+'jrnAnzStat.xml'
-                                   :%pAddr(stat_XmlInput));
-       lStat=tree_getFirst(g.lStats);
-       dow lStat<>*null;
-         pStat=tree_getItem(lStat);
-         stat.lFormula=int_FormulaLoad(stat.formula:lJrnEntryFmt);
-         lStat=tree_getNextToDisplay(g.lStats:lStat);
-       endDo;
-       //‚loop on each entries
-       lEntry=tree_getFirst(g.lEntries);
-       dow lEntry<>*null;
-         pEntry=tree_getItem(lEntry);
-         JrnEntryFmt.pBuffer1=%addr(Entry.det);
-         ModelsLoad2(*null:g.lStats);
-         lEntry=tree_getNext(lEntry);
-       endDo;
-     p                 e
-      //‚--------------------------------------------------------------------
-      //‚load models (part 2)
-      //‚--------------------------------------------------------------------
-     pModelsLoad2      b
-     d ModelsLoad2     pi
-     d  lModels_                       *   const
-     d  lStats                         *   const
-      *
-     d  lModels        s               *
-     d  lModel         s               *
-     d  lStat          s               *
-     d  stat           ds                  likeDS(tStat)  based(pStat)
-     d  model          ds                  likeDS(tModel) based(pModel)
-     d  modelID        s             50a   varying
-       lStat=tree_getFirst(lStats);
-       dow lStat<>*null;
-         pStat=tree_getItem(lStat);
-         if lModels_<>*null;
-           lModels=lModels_;
-         elseif Stat.lModels<>*null;
-           lModels=Stat.lModels;
-         else;
-           stat.lModels=tree_getNewLink(*null);
-           lModels=Stat.lModels;
-         endIf;
-         modelID=int_formulaExec(stat.lFormula);
-         lModel=tree_getLinkFromList(lModels:kModel:modelID);
-         if lModel=*null;
-           pModel=tree_getNewItem(%addr(tModel):%size(tModel));
-           model.ID=modelID;
-           model.statID=Stat.ID;
-           tree_linkToParent(lModels:tree_getNewLink(pModel));
-         else;
-           pModel=tree_getItem(lModel);
-         endIf;
-         model.count+=1;
-         modelsLoad2(stat.lModels:lStat);
-         lStat=tree_getNext(lStat);
+         lVariant=tree_getNexttodisplay(g.lEntries:lVariant);
        endDo;
      p                 e
       //‚--------------------------------------------------------------------
       //‚Sub-Entries load
       //‚--------------------------------------------------------------------
-     pSubEntriesLoad   b
-     d SubEntriesLoad  pi
+     ploadSubEntries   b
+     d loadSubEntries  pi
      d  lEntry                         *   const
      d  lParentFmt                     *   const
      d  pos                          10u 0 value
@@ -1063,8 +1041,82 @@
             tree_linktoparent(lEntry:tree_getnewlink(pSubEntry));
             tree_closeLink(lEntry);
           endIf;
-          SubEntriesLoad(lEntry:lFormat:subFormat.pos+pos);
+          loadSubEntries(lEntry:lFormat:subFormat.pos+pos);
          endIf;
          lSubFormat=tree_getNext(lSubformat);
+       endDo;
+     p                 e
+      //‚--------------------------------------------------------------------
+      //‚load models
+      //‚--------------------------------------------------------------------
+     ploadModels       b
+     d loadModels      pi
+      *
+     d lJrnEntryFmt    s               *
+     d  JrnEntryFmt    ds                  likeDs(tFormat)based(pJrnEntryFmt)
+     d lVariant        s               *
+     d Entry           ds                  likeDs(tEntry) based(pEntry)
+     d lStat           s               *
+     d stat            ds                  likeDS(tStat) based(pStat)
+       //‚load journal entry format
+       lJrnEntryFmt=fmt_getFormat(a.lFmts:'JRNENTRY':'Y');
+       pjrnEntryFmt=tree_getItem(lJrnEntryFmt);
+       //‚load formulas for stat
+       g.lStats=tree_Xml2Tree(env_getAppliPath+'jrnAnzStat.xml'
+                                   :%pAddr(stat_XmlInput));
+       lStat=tree_getFirst(g.lStats);
+       dow lStat<>*null;
+         pStat=tree_getItem(lStat);
+         stat.lFormula=int_FormulaLoad(stat.formula:lJrnEntryFmt);
+         lStat=tree_getNextToDisplay(g.lStats:lStat);
+       endDo;
+       //‚loop on each entries
+       lVariant=tree_getFirst(g.lEntries);
+       dow lVariant<>*null;
+         if tree_isofthekind(kEntry:lVariant:pEntry);
+           JrnEntryFmt.pBuffer1=%addr(Entry.det);
+           loadModels2(*null:g.lStats);
+         endIf;
+         lVariant=tree_getNextToDisplay(g.lEntries:lVariant);
+       endDo;
+     p                 e
+      //‚--------------------------------------------------------------------
+      //‚load models (part 2)
+      //‚--------------------------------------------------------------------
+     ploadModels2      b
+     d loadModels2     pi
+     d  lModels_                       *   const
+     d  lStats                         *   const
+      *
+     d  lModels        s               *
+     d  lModel         s               *
+     d  lStat          s               *
+     d  stat           ds                  likeDS(tStat)  based(pStat)
+     d  model          ds                  likeDS(tModel) based(pModel)
+     d  modelID        s             50a   varying
+       lStat=tree_getFirst(lStats);
+       dow lStat<>*null;
+         pStat=tree_getItem(lStat);
+         if lModels_<>*null;
+           lModels=lModels_;
+         elseif Stat.lModels<>*null;
+           lModels=Stat.lModels;
+         else;
+           stat.lModels=tree_getNewLink(*null);
+           lModels=Stat.lModels;
+         endIf;
+         modelID=int_formulaExec(stat.lFormula);
+         lModel=tree_getLinkFromList(lModels:kModel:modelID);
+         if lModel=*null;
+           pModel=tree_getNewItem(%addr(tModel):%size(tModel));
+           model.ID=modelID;
+           model.statID=Stat.ID;
+           tree_linkToParent(lModels:tree_getNewLink(pModel));
+         else;
+           pModel=tree_getItem(lModel);
+         endIf;
+         model.count+=1;
+         loadModels2(stat.lModels:lStat);
+         lStat=tree_getNext(lStat);
        endDo;
      p                 e
